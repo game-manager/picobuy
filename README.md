@@ -1,56 +1,95 @@
 # PicoBuy
 
-**欲しいを、もっと手軽に。** Amazonで見つけた商品の購入依頼を体験できる、React + TypeScript + Vite製の静的デモアプリです。Amazon公式またはAmazonと提携しているサービスではありません。商品情報は利用者が手入力し、商品ページのスクレイピングは行いません。
+**欲しいを、もっと手軽に。** Amazonで見つけた商品の購入依頼を受け付け、進捗を管理するWebアプリです。Amazon公式または提携サービスではありません。商品情報は利用者が入力し、スクレイピングは行いません。
 
-## できること
+## 無料構成
 
-- 商品名、Amazon商品URL、価格、数量、支払い予定日時、備考の入力
-- 商品代金に対する10%の手数料と合計金額の自動計算
-- 注文内容確認、確定、履歴、詳細、8段階の進捗タイムライン
-- `/#/admin` の管理デモで注文一覧、詳細、ステータス変更、見積書・請求書の表示と印刷
-- LocalStorageへの注文保存（ページを再読み込みしても保持）
+- React + TypeScript + Vite。ソースはGitHub、画面はAppwrite Sitesの無料プランで配信します。
+- Appwrite Authのメール認証コードでログインします。Google Cloudの設定は不要です。Appwrite Cloudの標準送信元を利用し、6桁のコードをメールで届けます。
+- 独自ドメインがないため、ブラウザによってセッションはLocalStorageに保存されます。共有端末での利用を避け、将来独自ドメインを設定できる場合は同一サイトのCookieへ移行してください。
+- Appwrite TablesDBに注文と請求書を保存します。管理者権限と金額計算はAppwrite Functionのサーバー側で判定します。
+- 利用者には自分の注文だけを返し、管理者にはすべての注文を返します。テーブルにはクライアントの直接アクセス権を付与しません。
+- 商品代金の10%を手数料としてサーバー側で計算します。請求書は管理者が内容を確認して発行し、発行時点の情報を固定します。
+- オンライン決済はありません。入金とAmazonでの購入は担当者がサービス外で確認・実行します。
 
-## 重要な制限
+GitHub Pagesは[商用取引を主目的とするサイトの無料ホスティングに利用できません](https://docs.github.com/en/pages/getting-started-with-github-pages/github-pages-limits)。従来のPages版はデモであり、実際の注文は受け付けません。
 
-**このアプリはUI・注文フロー検証用の初期版・デモ版です。** 注文データは利用中のブラウザのLocalStorageにだけ保存されます。同じブラウザ・同じオリジンでのみ閲覧でき、別端末の利用者や管理者とは共有されません。ブラウザデータを削除すると注文も消えます。実際の購入、請求、決済、通知は行いません。見積書・請求書もデモ表示です。
+**無料プランの制約:** Appwriteの無料枠には月間利用上限があり、[開発操作が7日間ないプロジェクトは停止します](https://appwrite.io/changelog/entry/2026-02-20-1)。利用者のアクセスだけで常時稼働を保証できません。無料枠には日次バックアップや稼働保証がありません。注文の運用開始前にデータの定期エクスポート、個人情報の扱い、事業者表示、問い合わせ窓口を決めてください。上限に達した場合に継続提供を保証する構成ではありません。
 
-`/#/admin` は誰でも開けるデモ画面で、認証機能はありません。**本番環境ではサーバー側認証、アクセス制御、データベースが必要です。** JavaScript内に管理者パスワードや秘密鍵を置かないでください。実際の顧客情報や支払い情報を入力しないでください。
+標準の認証メールは汎用的な送信元から届き、[無料プランでは独自SMTPやテンプレートを設定できません](https://appwrite.io/docs/products/auth/message-templates)。利用開始前に複数のメールサービスで受信を確認し、届かない場合の問い合わせ手段を用意してください。
 
-## ローカルで動かす
+## ローカル確認
 
 Node.js 22以降を用意します。
 
-1. このフォルダで `npm install` を実行します。
-2. `npm run dev` を実行し、表示されたURL（通常は `http://localhost:5173/`）を開きます。
-3. `npm run build` で本番用の `dist/` を生成します。必要に応じて `npm run preview` で確認できます。
+```bash
+npm install
+copy .env.example .env.local
+npm run dev
+npm run build
+npm test
+```
 
-## GitHub Pagesへの公開
+`.env.local` には自分のAppwriteプロジェクトの公開情報を入力します。`VITE_` で始まる値はブラウザに配信されます。APIキーや秘密情報を設定しないでください。設定がない画面は「現在ご利用いただけません」と表示します。
 
-4. GitHubでRepositoryを作成します。例: `picobuy`。公開リポジトリにする場合は、実データや秘密情報をコミットしないでください。
-5. このフォルダで以下を実行し、`main` ブランチへpushします。
+## Appwrite CLI
 
-   ```bash
-   git init
-   git branch -M main
-   git remote add origin https://github.com/YOUR_NAME/picobuy.git
-   git add .
-   git commit -m "Build PicoBuy static demo"
-   git push -u origin main
+公式CLIでプロジェクト、TablesDB、Functions、Sitesを管理できます。WindowsでもNode.jsがあれば以下を実行できます。
+
+```powershell
+npm install -g appwrite-cli
+appwrite login
+appwrite init project
+appwrite whoami
+appwrite tablesdb list
+appwrite functions list
+appwrite sites list
+```
+
+このリポジトリの `appwrite.config.json` は作成済みのPicoBuyプロジェクトの公開IDとエンドポイントを指します。`appwrite login` はブラウザで本人確認します。CLIのログイン情報やAPIキーはGitHubへ登録しないでください。
+
+## Appwrite Cloudの初期設定
+
+1. [Appwrite Cloud](https://cloud.appwrite.io/)で無料アカウントとプロジェクト `PicoBuy` を作成します。プロジェクトのAPIエンドポイントとProject IDを控えます。このリポジトリに記録したPicoBuyプロジェクトは作成済みです。
+2. Appwrite CLIでログインし、プロジェクトを接続します。作成済みのPicoBuyプロジェクトではテーブルを再作成する必要はありません。別プロジェクトに複製する場合だけ、設定ファイルのプロジェクトIDを切り替えて `appwrite push tables` を実行します。
+
+   ```powershell
+   appwrite login
+   appwrite init project
+   appwrite tablesdb list
    ```
 
-6. Repositoryの **Settings → Pages → Build and deployment → Source** を **GitHub Actions** に設定します。
-7. `main` へのpush後、`.github/workflows/deploy.yml` が `npm ci`、`npm run build`、GitHub Pagesへのデプロイを自動実行します。Repositoryの **Actions** で成功を確認し、**Settings → Pages** に表示される公開URLを開きます。
+3. CLIを使わない別プロジェクトへの初期化では、`databases.read` と `databases.write` だけを許可した一時APIキーをローカル環境変数に設定し、`api-fn/setup.mjs` を実行できます。値は自分のものに置き換え、キーはチャット・GitHub・サイトの環境変数へ貼らないでください。
 
-## Pagesのサブディレクトリ対応
+   ```powershell
+   $env:APPWRITE_ENDPOINT = 'https://REGION.cloud.appwrite.io/v1'
+   $env:APPWRITE_PROJECT_ID = 'PROJECT_ID'
+   $env:APPWRITE_API_KEY = '作成したAPIキー'
+   node api-fn/setup.mjs
+   Remove-Item Env:APPWRITE_API_KEY
+   ```
 
-Viteの `base` は `./` に設定しています。JavaScript・CSS・画像はリポジトリ名を含む公開パスから相対的に読み込まれます。画面遷移はハッシュルーティング（`/#/request`、`/#/history`、`/#/admin` など）なので、GitHub Pagesで再読み込みしても404になりません。`/admin` 相当のURLは `/#/admin` です。
+4. 作成済みの **Functions** `picobuy-api` にGitHub Repositoryの `api-fn` ディレクトリを接続します。エントリーポイントは `index.mjs`、インストールは `npm ci`、実行権限は `Any`、一時APIキーのスコープは `databases.read` と `databases.write` です。関数は毎回AppwriteのJWTを検証し、未ログインの注文操作を拒否します。
+5. 関数の環境変数に `APPWRITE_ENDPOINT`、`APPWRITE_PROJECT_ID`、`ISSUER_NAME`、`ISSUER_ADDRESS`、`ISSUER_CONTACT`、`ISSUER_TAX_DETAILS`、`PAYMENT_INSTRUCTIONS` を登録します。後半5項目には実際の事業者・請求書情報を入力してください。架空の事業者情報では注文受付を開始しないでください。
+6. 作成済みの **Sites** `picobuy-web` に同じGitHub Repositoryを接続します。ビルドコマンドは `npm run build`、出力先は `dist`、本番ブランチは準備が完了した後に `main` とします。ビルド環境変数 `VITE_APPWRITE_ENDPOINT`、`VITE_APPWRITE_PROJECT_ID`、`VITE_APPWRITE_FUNCTION_ID=picobuy-api` は設定済みです。
+7. Sitesで発行されたホスト名をAppwriteプロジェクトのWebプラットフォームに追加します。独自ドメインは不要です。
+8. Appwrite Consoleの **PicoBuy → Auth** でメール認証コード（Email OTP）を有効にします。作成済みプロジェクトでは有効化済みです。[メール認証コードの手順](https://appwrite.io/docs/products/auth/email-otp)を参照してください。
+9. 使わないサインイン方式（メールとパスワード、Magic URL、電話、匿名、招待）は無効にします。JWTはFunction内での本人確認に使用するため有効のままにします。自分のメールでログインを確認し、管理者にする利用者にAppwrite Consoleから `admin` ラベルを付けます。利用者自身が管理者ラベルを付ける画面やAPIはありません。
+10. 管理者とは別の利用者でもログインし、注文作成、履歴、進捗更新、請求書発行、再読み込み後の保持を確認してから一般利用を開始します。
 
-## データと計算
+Appwrite Sitesは接続したGitHubブランチへのpushで自動ビルド・配信します。GitHub Actionsの `ci.yml` はビルドとテストだけを行います。秘密情報はRepositoryに保存しません。
 
-注文には注文番号、商品名、Amazon商品URL、商品価格、数量、手数料、合計金額、支払い予定日時、注文ステータス、備考、作成日時、更新日時を保存します。手数料は `商品価格 × 数量 × 10%` を1円単位で四捨五入して計算します。注文時点の計算結果を保存します。
+## データと権限
 
-ステータス: 依頼受付 → 支払い待ち → 支払い済み → 注文済み → 発送待ち → 発送済み → 到着 → 受け渡し完了。
+- `orders` テーブル: 注文番号、利用者ID・メール、商品名、Amazon URL、単価、数量、手数料、合計、支払い予定日時、ステータス、備考、進捗履歴、作成・更新日時。
+- `invoices` テーブル: 発行時の金額、宛先、発行者情報、支払い案内を固定したスナップショット。
+- テーブルのクライアント権限は空です。注文作成・閲覧・更新と請求書発行はFunctionを通し、Functionが利用者ID・`admin` ラベルを検証します。
+- 注文の再送には冪等キーを使い、同じ依頼が二重登録されないようにします。
+- ステータス: 依頼受付 → 支払い待ち → 支払い済み → 注文済み → 発送待ち → 発送済み → 到着 → 受け渡し完了。
 
-## 技術構成
+## 運用時の確認
 
-React、TypeScript、Vite、Lucide React。ホスティングはGitHub Pages、デプロイはGitHub Actionsです。Firebase関連の実装や設定はありません。
+- 利用者が入力した商品名・価格は、担当者がAmazonの商品ページで確認します。
+- 入金を確認するまで「支払い済み」に変更しません。
+- 見積書は利用者入力価格に基づく概算です。請求書には実在する事業者情報と適切な税の記載を設定します。
+- 旧デモ版のLocalStorageデータは本番注文へ自動移行しません。

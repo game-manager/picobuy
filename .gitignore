@@ -7,3 +7,7 @@ dist/
 *.local
 coverage/
 *.tsbuildinfo
+.wrangler/
+.agents/
+.claude/
+work/

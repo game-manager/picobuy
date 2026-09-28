@@ -1,0 +1,9 @@
+{
+  "name": "picobuy-api",
+  "private": true,
+  "type": "module",
+  "main": "index.mjs",
+  "dependencies": {
+    "node-appwrite": "^29.0.0"
+  }
+}
