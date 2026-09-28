@@ -70,6 +70,29 @@ function App() {
     return () => { active = false }
   }, [path, user])
   useEffect(() => {
+    if (!user) return
+    let active = true
+    const refresh = async () => {
+      if (document.hidden) return
+      try {
+        const parts = path.split('/').filter(Boolean)
+        const detailId = parts[0] === 'admin' && parts[1] === 'order' ? parts[2] : ['order', 'document'].includes(parts[0]) ? parts[1] : null
+        const [{ orders: latest }, detail] = await Promise.all([orderApi.list(), detailId ? orderApi.get(detailId) : Promise.resolve(null)])
+        if (active) {
+          setOrders(latest)
+          if (detail) setDetailOrder(detail.order)
+        }
+      } catch (cause) {
+        if (active && cause instanceof ApiError && cause.status === 401) {
+          setUser(null); setOrders([]); setDetailOrder(null)
+        }
+      }
+    }
+    const interval = window.setInterval(refresh, 30000)
+    document.addEventListener('visibilitychange', refresh)
+    return () => { active = false; window.clearInterval(interval); document.removeEventListener('visibilitychange', refresh) }
+  }, [user, path])
+  useEffect(() => {
     const parts = path.split('/').filter(Boolean)
     if (!user || parts[0] !== 'document' || parts[2] !== 'invoice' || !parts[1]) return
     let active = true
@@ -86,8 +109,12 @@ function App() {
     if (path === '/login') go('/history')
   }
   const logout = async () => {
-    try { await authApi.logout() } catch { /* Clear the local view even if the network is unavailable. */ }
-    setUser(null); setOrders([]); setDetailOrder(null); go('/')
+    try {
+      await authApi.logout()
+      setUser(null); setOrders([]); setDetailOrder(null); go('/')
+    } catch (cause) {
+      setActionError(cause instanceof Error ? cause.message : 'ログアウトできませんでした。通信状態を確認してください。')
+    }
   }
   const create = async () => {
     if (busy) return
