@@ -5,8 +5,8 @@
 ## 無料構成
 
 - React + TypeScript + Vite。ソースはGitHub、画面はAppwrite Sitesの無料プランで配信します。
-- Appwrite AuthとGoogleアカウントでログインします。認証メールの送信設定や独自ドメインは不要です。Googleアカウントがない利用者はログインできません。
-- OAuth2トークンでログインを完了します。独自ドメインがないためブラウザによってセッションはLocalStorageに保存されます。共有端末での利用を避け、将来独自ドメインを設定できる場合は同一サイトのCookieへ移行してください。
+- Appwrite Authのメール認証コードでログインします。Google Cloudの設定は不要です。Appwrite Cloudの標準送信元を利用し、6桁のコードをメールで届けます。
+- 独自ドメインがないため、ブラウザによってセッションはLocalStorageに保存されます。共有端末での利用を避け、将来独自ドメインを設定できる場合は同一サイトのCookieへ移行してください。
 - Appwrite TablesDBに注文と請求書を保存します。管理者権限と金額計算はAppwrite Functionのサーバー側で判定します。
 - 利用者には自分の注文だけを返し、管理者にはすべての注文を返します。テーブルにはクライアントの直接アクセス権を付与しません。
 - 商品代金の10%を手数料としてサーバー側で計算します。請求書は管理者が内容を確認して発行し、発行時点の情報を固定します。
@@ -15,6 +15,8 @@
 GitHub Pagesは[商用取引を主目的とするサイトの無料ホスティングに利用できません](https://docs.github.com/en/pages/getting-started-with-github-pages/github-pages-limits)。従来のPages版はデモであり、実際の注文は受け付けません。
 
 **無料プランの制約:** Appwriteの無料枠には月間利用上限があり、[開発操作が7日間ないプロジェクトは停止します](https://appwrite.io/changelog/entry/2026-02-20-1)。利用者のアクセスだけで常時稼働を保証できません。無料枠には日次バックアップや稼働保証がありません。注文の運用開始前にデータの定期エクスポート、個人情報の扱い、事業者表示、問い合わせ窓口を決めてください。上限に達した場合に継続提供を保証する構成ではありません。
+
+標準の認証メールは汎用的な送信元から届き、[無料プランでは独自SMTPやテンプレートを設定できません](https://appwrite.io/docs/products/auth/message-templates)。利用開始前に複数のメールサービスで受信を確認し、届かない場合の問い合わせ手段を用意してください。
 
 ## ローカル確認
 
@@ -44,7 +46,7 @@ appwrite functions list
 appwrite sites list
 ```
 
-このリポジトリの `appwrite.config.json` は作成済みのPicoBuyプロジェクトの公開IDとエンドポイントを指します。`appwrite login` はブラウザで本人確認します。CLIのログイン情報やAPIキーはGitHubへ登録しないでください。Google OAuthクライアントの作成はGoogle Cloudで行い、そのIDとシークレットはAppwrite ConsoleのAuth設定に入力します。
+このリポジトリの `appwrite.config.json` は作成済みのPicoBuyプロジェクトの公開IDとエンドポイントを指します。`appwrite login` はブラウザで本人確認します。CLIのログイン情報やAPIキーはGitHubへ登録しないでください。
 
 ## Appwrite Cloudの初期設定
 
@@ -71,8 +73,8 @@ appwrite sites list
 5. 関数の環境変数に `APPWRITE_ENDPOINT`、`APPWRITE_PROJECT_ID`、`ISSUER_NAME`、`ISSUER_ADDRESS`、`ISSUER_CONTACT`、`ISSUER_TAX_DETAILS`、`PAYMENT_INSTRUCTIONS` を登録します。後半5項目には実際の事業者・請求書情報を入力してください。架空の事業者情報では注文受付を開始しないでください。
 6. 作成済みの **Sites** `picobuy-web` に同じGitHub Repositoryを接続します。ビルドコマンドは `npm run build`、出力先は `dist`、本番ブランチは準備が完了した後に `main` とします。ビルド環境変数 `VITE_APPWRITE_ENDPOINT`、`VITE_APPWRITE_PROJECT_ID`、`VITE_APPWRITE_FUNCTION_ID=picobuy-api` は設定済みです。
 7. Sitesで発行されたホスト名をAppwriteプロジェクトのWebプラットフォームに追加します。独自ドメインは不要です。
-8. Appwrite Consoleの **PicoBuy → Auth → Social providers（ソーシャルプロバイダー）** を開き、**Popular** または **All providers** からGoogleを選びます。Google側でOAuthクライアントを作成し、Appwrite画面の **Browser sign-in** に表示されるリダイレクトURLをGoogleの「承認済みのリダイレクトURI」に登録します。GoogleのクライアントIDとシークレットはAppwriteの設定画面にだけ入力し、リポジトリやチャットに貼らないでください。[Appwriteの現在の設定手順](https://appwrite.io/docs/partners/project/oauth)を参照してください。
-9. Google以外のサインイン方式（メール、電話、匿名、招待）をAuth設定で無効にします。JWTはFunction内での本人確認に使用するため有効のままにします。自分のGoogleアカウントでログインを確認し、管理者にする利用者にAppwrite Consoleから `admin` ラベルを付けます。利用者自身が管理者ラベルを付ける画面やAPIはありません。
+8. Appwrite Consoleの **PicoBuy → Auth** でメール認証コード（Email OTP）を有効にします。作成済みプロジェクトでは有効化済みです。[メール認証コードの手順](https://appwrite.io/docs/products/auth/email-otp)を参照してください。
+9. 使わないサインイン方式（メールとパスワード、Magic URL、電話、匿名、招待）は無効にします。JWTはFunction内での本人確認に使用するため有効のままにします。自分のメールでログインを確認し、管理者にする利用者にAppwrite Consoleから `admin` ラベルを付けます。利用者自身が管理者ラベルを付ける画面やAPIはありません。
 10. 管理者とは別の利用者でもログインし、注文作成、履歴、進捗更新、請求書発行、再読み込み後の保持を確認してから一般利用を開始します。
 
 Appwrite Sitesは接続したGitHubブランチへのpushで自動ビルド・配信します。GitHub Actionsの `ci.yml` はビルドとテストだけを行います。秘密情報はRepositoryに保存しません。

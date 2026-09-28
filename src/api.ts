@@ -1,4 +1,4 @@
-import { Account, AppwriteException, Client, Functions, OAuthProvider, type Models } from 'appwrite'
+import { Account, AppwriteException, Client, Functions, ID, type Models } from 'appwrite'
 import type { Draft, Order, Status } from './data'
 
 export type User = { id: string; email: string; role: 'customer' | 'admin' }
@@ -39,26 +39,18 @@ async function execute<T>(action: string, data: Record<string, unknown> = {}): P
 
 export const authApi = {
   health: async () => configured ? execute<{ ready: boolean; turnstileSiteKey: string }>('health').then(value => ({ ...value, turnstileSiteKey: '' })) : { ready: false, turnstileSiteKey: '' },
-  completeGoogleLogin: async () => {
-    const url = new URL(location.href)
-    const userId = url.searchParams.get('userId')
-    const secret = url.searchParams.get('secret')
-    if (!userId || !secret) return false
-    url.searchParams.delete('userId')
-    url.searchParams.delete('secret')
-    history.replaceState(null, '', url)
-    if (!account) throw new ApiError('サービスの設定が完了していません。', 503)
-    try { await account.createSession({ userId, secret }); location.hash = '/history'; return true }
-    catch (cause) { throw asApiError(cause) }
-  },
   me: async () => {
     if (!account) throw new ApiError('サービスの設定が完了していません。', 503)
     try { return { user: toUser(await account.get()) } } catch (cause) { throw asApiError(cause) }
   },
-  loginWithGoogle: async () => {
+  requestCode: async (email: string) => {
     if (!account) throw new ApiError('サービスの設定が完了していません。', 503)
-    const callback = `${location.origin}${location.pathname}`
-    try { account.createOAuth2Token({ provider: OAuthProvider.Google, success: callback, failure: `${callback}#/login` }) }
+    try { const token = await account.createEmailToken({ userId: ID.unique(), email }); return { userId: token.userId } }
+    catch (cause) { throw asApiError(cause) }
+  },
+  verifyCode: async (userId: string, code: string) => {
+    if (!account) throw new ApiError('サービスの設定が完了していません。', 503)
+    try { await account.createSession({ userId, secret: code }); return { user: toUser(await account.get()) } }
     catch (cause) { throw asApiError(cause) }
   },
   logout: async () => {
