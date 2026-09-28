@@ -2,56 +2,69 @@
 
 **欲しいを、もっと手軽に。** Amazonで見つけた商品の購入依頼を受け付け、進捗を管理するWebアプリです。Amazon公式または提携サービスではありません。商品情報は利用者が入力し、スクレイピングは行いません。
 
-## 構成
+## 無料構成
 
-- React + TypeScript + Vite の画面とCloudflare Worker APIを同じオリジンから配信
-- Cloudflare D1に利用者、注文、進捗履歴、セッションを保存
-- メール認証コードでログイン。認証コードは10分有効、試行回数と送信回数を制限
-- HttpOnly・Secure・SameSite=Lax Cookieでログイン状態を維持
-- 管理者権限はD1の利用者レコードに保存。注文の閲覧・変更はAPIで権限を確認
-- 商品代金に対して10%の手数料を**サーバー側で再計算**
-- 管理者が内容を確認した後、事業者情報を含む変更不可の請求書を発行
-- GitHub Repositoryでソース管理。GitHub Actionsでビルド、D1マイグレーション、Workerデプロイ
+- React + TypeScript + Vite。ソースはGitHub、画面はAppwrite Sitesの無料プランで配信します。
+- Appwrite AuthとGoogleアカウントでログインします。認証メールの送信設定や独自ドメインは不要です。Googleアカウントがない利用者はログインできません。
+- OAuth2トークンでログインを完了します。独自ドメインがないためブラウザによってセッションはLocalStorageに保存されます。共有端末での利用を避け、将来独自ドメインを設定できる場合は同一サイトのCookieへ移行してください。
+- Appwrite TablesDBに注文と請求書を保存します。管理者権限と金額計算はAppwrite Functionのサーバー側で判定します。
+- 利用者には自分の注文だけを返し、管理者にはすべての注文を返します。テーブルにはクライアントの直接アクセス権を付与しません。
+- 商品代金の10%を手数料としてサーバー側で計算します。請求書は管理者が内容を確認して発行し、発行時点の情報を固定します。
+- オンライン決済はありません。入金とAmazonでの購入は担当者がサービス外で確認・実行します。
 
-**オンライン決済は実装していません。** 支払いの確認と商品購入は運営側の実務として行い、管理者がステータスを更新します。注文データはLocalStorageに保存しません。旧デモ版のLocalStorageデータは本番の注文として自動移行しません。
+GitHub Pagesは[商用取引を主目的とするサイトの無料ホスティングに利用できません](https://docs.github.com/en/pages/getting-started-with-github-pages/github-pages-limits)。従来のPages版はデモであり、実際の注文は受け付けません。
 
-## 現在の公開状態
+**無料プランの制約:** Appwriteの無料枠には月間利用上限があり、1週間利用がないプロジェクトは停止します。無料枠には日次バックアップや稼働保証がありません。注文の運用開始前にデータの定期エクスポート、個人情報の扱い、事業者表示、問い合わせ窓口を決めてください。上限に達した場合に継続提供を保証する構成ではありません。
 
-このブランチは本番化の実装です。D1とWorkerの初回配置は完了し、[WorkerのURL](https://picobuy-production.himawa.workers.dev/)では設定不足の間「現在ご利用いただけません」と表示します。メール送信元ドメイン、Resend、Turnstile、管理者メールおよび事業者情報の設定が完了するまで**一般利用を開始しないでください**。既存のGitHub Pagesデモは、別途停止または転送するまで残ります。
+## ローカル確認
 
-## ローカルで確認
-
-Node.js 22以降が必要です。
+Node.js 22以降を用意します。
 
 ```bash
 npm install
-npm run build
+copy .env.example .env.local
 npm run dev
+npm run build
+npm test
 ```
 
-`npm run dev` はD1のローカルマイグレーションを適用して `http://127.0.0.1:8787/` を起動します。実際のメール認証は送信元と秘密情報を設定するまで利用できません。秘密情報をソースやGitHubにコミットしないでください。`npm run build` は画面・Worker双方のTypeScriptチェックと本番ビルドを実行します。
+`.env.local` には自分のAppwriteプロジェクトの公開情報を入力します。`VITE_` で始まる値はブラウザに配信されます。APIキーや秘密情報を設定しないでください。設定がない画面は「現在ご利用いただけません」と表示します。
 
-## 本番初期設定
+## Appwrite Cloudの初期設定
 
-1. Cloudflareアカウントで `npx wrangler login` し、`npx wrangler whoami` で対象アカウントを確認します。この作業環境では認証済みです。
-2. 認証メール用の送信元ドメインを用意し、[Resendで確認](https://resend.com/docs/dashboard/domains/introduction)します。Resend APIキーと `MAIL_FROM`（例: `PicoBuy <login@your-domain.example>`）を用意します。
-3. [Cloudflare Turnstile](https://developers.cloudflare.com/turnstile/get-started/)に公開URLを登録し、サイトキーと秘密キーを用意します。
-4. D1 `picobuy-production` の作成・マイグレーションとWorkerの初回デプロイは完了しています。D1のIDは `wrangler.jsonc` に設定済みです。
+1. [Appwrite Cloud](https://cloud.appwrite.io/)で無料アカウントとプロジェクト `PicoBuy` を作成します。プロジェクトのAPIエンドポイントとProject IDを控えます。
+2. プロジェクトでAPIキーを作り、`databases.read` と `databases.write` だけを許可します。このキーはローカルの環境変数にのみ入力し、チャット・GitHub・サイトの環境変数へ貼らないでください。
+3. このリポジトリの `api-fn/setup.mjs` を実行してデータベースとテーブルを作成します。PowerShellでは以下を使用します。値は自分のものに置き換えます。
 
-5. Cloudflare Workerの**Secrets**に `AUTH_SECRET`（32文字以上のランダム値）、`RESEND_API_KEY`、`TURNSTILE_SECRET_KEY` を設定します。`MAIL_FROM` と `TURNSTILE_SITE_KEY` もWorker環境変数として設定します。請求書の発行者情報として `ISSUER_NAME`、`ISSUER_ADDRESS`、`ISSUER_CONTACT`、`ISSUER_TAX_DETAILS`、`PAYMENT_INSTRUCTIONS` を設定します。`wrangler.jsonc` の `keep_vars` がダッシュボードで設定した環境変数を保持します。秘密を `wrangler.jsonc`、`.env`、GitHub Repositoryへ書き込まないでください。設定後に再デプロイします。
-6. 管理者にしたいメールアドレスで通常のメール認証を完了させ、D1内の該当利用者の `role` を `admin` に変更します。管理者を画面から自己登録する機能はありません。
-7. GitHub Repositoryの **Settings → Secrets and variables → Actions** に `CLOUDFLARE_API_TOKEN` と `CLOUDFLARE_ACCOUNT_ID` を登録します。必要な権限はWorkerとD1のデプロイに限定します。`main` へのpush後、`.github/workflows/deploy.yml` が自動デプロイします。
-8. 公開URLでメール認証、利用者による注文、別の管理者セッションでの閲覧・ステータス更新、再読み込み後の保持を確認してから利用を開始します。
+   ```powershell
+   $env:APPWRITE_ENDPOINT = 'https://REGION.cloud.appwrite.io/v1'
+   $env:APPWRITE_PROJECT_ID = 'PROJECT_ID'
+   $env:APPWRITE_API_KEY = '作成したAPIキー'
+   node api-fn/setup.mjs
+   Remove-Item Env:APPWRITE_API_KEY
+   ```
 
-## APIとデータ
+4. Appwriteの **Functions** でID `picobuy-api`、Node.jsランタイムの関数を作成します。GitHub Repositoryの `api-fn` ディレクトリを接続し、エントリーポイントを `index.mjs`、インストールを `npm ci` とします。実行権限は `Any`、関数内の一時APIキーには `databases.read` と `databases.write` だけを付けます。関数は毎回AppwriteのJWTを検証し、未ログインの注文操作を拒否します。
+5. 関数の環境変数に `APPWRITE_ENDPOINT`、`APPWRITE_PROJECT_ID`、`ISSUER_NAME`、`ISSUER_ADDRESS`、`ISSUER_CONTACT`、`ISSUER_TAX_DETAILS`、`PAYMENT_INSTRUCTIONS` を登録します。後半5項目には実際の事業者・請求書情報を入力してください。架空の事業者情報では注文受付を開始しないでください。
+6. **Sites** で同じGitHub Repositoryを接続し、Vite/Reactサイトを作成します。ビルドコマンドは `npm run build`、出力先は `dist`、本番ブランチは準備が完了した後に `main` とします。ビルド環境変数 `VITE_APPWRITE_ENDPOINT`、`VITE_APPWRITE_PROJECT_ID`、`VITE_APPWRITE_FUNCTION_ID=picobuy-api` を設定します。
+7. Sitesで発行されたホスト名をAppwriteプロジェクトのWebプラットフォームに追加します。独自ドメインは不要です。
+8. Appwrite Consoleの **Auth → Settings → OAuth2 Providers → Google** を開きます。Google側でOAuthクライアントを作成し、Appwrite画面に表示されるリダイレクトURLをGoogleの「承認済みのリダイレクトURI」に登録します。GoogleのクライアントIDとシークレットはAppwriteの設定画面にだけ入力し、リポジトリやチャットに貼らないでください。[Appwrite OAuth設定手順](https://appwrite.io/docs/products/auth/oauth2)を参照してください。
+9. 自分のGoogleアカウントでログインを確認します。管理者にする利用者にAppwrite Consoleから `admin` ラベルを付けます。利用者自身が管理者ラベルを付ける画面やAPIはありません。
+10. 管理者とは別の利用者でもログインし、注文作成、履歴、進捗更新、請求書発行、再読み込み後の保持を確認してから一般利用を開始します。
 
-`/api/auth/request-code`、`/api/auth/verify-code`、`/api/auth/me`、`/api/auth/logout`、`/api/orders`、`/api/orders/:id/invoice` を使用します。APIは同一オリジンからの更新だけを受け付けます。注文番号、商品情報、価格、数量、手数料、合計、支払い予定日時、ステータス、備考、作成・更新日時、利用者、ステータス変更履歴をD1へ保存します。注文番号と金額はサーバーで生成します。請求書は管理者が発行し、発行時の金額・事業者情報をD1に保存して固定します。
+Appwrite Sitesは接続したGitHubブランチへのpushで自動ビルド・配信します。GitHub Actionsの `ci.yml` はビルドとテストだけを行います。秘密情報はRepositoryに保存しません。
 
-ステータス: 依頼受付 → 支払い待ち → 支払い済み → 注文済み → 発送待ち → 発送済み → 到着 → 受け渡し完了。
+## データと権限
 
-## 運用上の確認事項
+- `orders` テーブル: 注文番号、利用者ID・メール、商品名、Amazon URL、単価、数量、手数料、合計、支払い予定日時、ステータス、備考、進捗履歴、作成・更新日時。
+- `invoices` テーブル: 発行時の金額、宛先、発行者情報、支払い案内を固定したスナップショット。
+- テーブルのクライアント権限は空です。注文作成・閲覧・更新と請求書発行はFunctionを通し、Functionが利用者ID・`admin` ラベルを検証します。
+- 注文の再送には冪等キーを使い、同じ依頼が二重登録されないようにします。
+- ステータス: 依頼受付 → 支払い待ち → 支払い済み → 注文済み → 発送待ち → 発送済み → 到着 → 受け渡し完了。
 
-- 注文時の価格・商品情報は利用者入力です。担当者がAmazonの商品ページで確認してください。
-- 支払い確認は外部で行い、確認後にのみ「支払い済み」に更新してください。
-- 見積書・請求書の正式発行には、事業者の正式名称、所在地、連絡先、税区分、支払い案内などが必要です。これらを確認せずに公開しないでください。
-- メール送信、D1のバックアップ・復元、事業者表示、個人情報の取り扱い、問い合わせ窓口を運用開始前に確認してください。
+## 運用時の確認
+
+- 利用者が入力した商品名・価格は、担当者がAmazonの商品ページで確認します。
+- 入金を確認するまで「支払い済み」に変更しません。
+- 見積書は利用者入力価格に基づく概算です。請求書には実在する事業者情報と適切な税の記載を設定します。
+- 旧デモ版のLocalStorageデータは本番注文へ自動移行しません。

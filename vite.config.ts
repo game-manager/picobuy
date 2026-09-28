@@ -3,6 +3,6 @@ import react from '@vitejs/plugin-react'
 
 export default defineConfig({
   plugins: [react()],
-  // Relative assets work both at / and at /<repository>/ on GitHub Pages.
+  // Relative assets keep previews and hosted subpaths working.
   base: './',
 })
