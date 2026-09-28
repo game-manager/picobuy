@@ -48,9 +48,16 @@ appwrite sites list
 
 ## Appwrite Cloudの初期設定
 
-1. [Appwrite Cloud](https://cloud.appwrite.io/)で無料アカウントとプロジェクト `PicoBuy` を作成します。プロジェクトのAPIエンドポイントとProject IDを控えます。
-2. プロジェクトでAPIキーを作り、`databases.read` と `databases.write` だけを許可します。このキーはローカルの環境変数にのみ入力し、チャット・GitHub・サイトの環境変数へ貼らないでください。
-3. このリポジトリの `api-fn/setup.mjs` を実行してデータベースとテーブルを作成します。PowerShellでは以下を使用します。値は自分のものに置き換えます。
+1. [Appwrite Cloud](https://cloud.appwrite.io/)で無料アカウントとプロジェクト `PicoBuy` を作成します。プロジェクトのAPIエンドポイントとProject IDを控えます。このリポジトリに記録したPicoBuyプロジェクトは作成済みです。
+2. Appwrite CLIでログインし、プロジェクトを接続します。作成済みのPicoBuyプロジェクトではテーブルを再作成する必要はありません。別プロジェクトに複製する場合だけ、設定ファイルのプロジェクトIDを切り替えて `appwrite push tables` を実行します。
+
+   ```powershell
+   appwrite login
+   appwrite init project
+   appwrite tablesdb list
+   ```
+
+3. CLIを使わない別プロジェクトへの初期化では、`databases.read` と `databases.write` だけを許可した一時APIキーをローカル環境変数に設定し、`api-fn/setup.mjs` を実行できます。値は自分のものに置き換え、キーはチャット・GitHub・サイトの環境変数へ貼らないでください。
 
    ```powershell
    $env:APPWRITE_ENDPOINT = 'https://REGION.cloud.appwrite.io/v1'
@@ -60,12 +67,12 @@ appwrite sites list
    Remove-Item Env:APPWRITE_API_KEY
    ```
 
-4. Appwriteの **Functions** でID `picobuy-api`、Node.jsランタイムの関数を作成します。GitHub Repositoryの `api-fn` ディレクトリを接続し、エントリーポイントを `index.mjs`、インストールを `npm ci` とします。実行権限は `Any`、関数内の一時APIキーには `databases.read` と `databases.write` だけを付けます。関数は毎回AppwriteのJWTを検証し、未ログインの注文操作を拒否します。
+4. 作成済みの **Functions** `picobuy-api` にGitHub Repositoryの `api-fn` ディレクトリを接続します。エントリーポイントは `index.mjs`、インストールは `npm ci`、実行権限は `Any`、一時APIキーのスコープは `databases.read` と `databases.write` です。関数は毎回AppwriteのJWTを検証し、未ログインの注文操作を拒否します。
 5. 関数の環境変数に `APPWRITE_ENDPOINT`、`APPWRITE_PROJECT_ID`、`ISSUER_NAME`、`ISSUER_ADDRESS`、`ISSUER_CONTACT`、`ISSUER_TAX_DETAILS`、`PAYMENT_INSTRUCTIONS` を登録します。後半5項目には実際の事業者・請求書情報を入力してください。架空の事業者情報では注文受付を開始しないでください。
-6. **Sites** で同じGitHub Repositoryを接続し、Vite/Reactサイトを作成します。ビルドコマンドは `npm run build`、出力先は `dist`、本番ブランチは準備が完了した後に `main` とします。ビルド環境変数 `VITE_APPWRITE_ENDPOINT`、`VITE_APPWRITE_PROJECT_ID`、`VITE_APPWRITE_FUNCTION_ID=picobuy-api` を設定します。
+6. 作成済みの **Sites** `picobuy-web` に同じGitHub Repositoryを接続します。ビルドコマンドは `npm run build`、出力先は `dist`、本番ブランチは準備が完了した後に `main` とします。ビルド環境変数 `VITE_APPWRITE_ENDPOINT`、`VITE_APPWRITE_PROJECT_ID`、`VITE_APPWRITE_FUNCTION_ID=picobuy-api` は設定済みです。
 7. Sitesで発行されたホスト名をAppwriteプロジェクトのWebプラットフォームに追加します。独自ドメインは不要です。
 8. Appwrite Consoleの **Auth → Settings → OAuth2 Providers → Google** を開きます。Google側でOAuthクライアントを作成し、Appwrite画面に表示されるリダイレクトURLをGoogleの「承認済みのリダイレクトURI」に登録します。GoogleのクライアントIDとシークレットはAppwriteの設定画面にだけ入力し、リポジトリやチャットに貼らないでください。[Appwrite OAuth設定手順](https://appwrite.io/docs/products/auth/oauth2)を参照してください。
-9. 自分のGoogleアカウントでログインを確認します。管理者にする利用者にAppwrite Consoleから `admin` ラベルを付けます。利用者自身が管理者ラベルを付ける画面やAPIはありません。
+9. Google以外のサインイン方式（メール、電話、匿名、招待）をAuth設定で無効にします。JWTはFunction内での本人確認に使用するため有効のままにします。自分のGoogleアカウントでログインを確認し、管理者にする利用者にAppwrite Consoleから `admin` ラベルを付けます。利用者自身が管理者ラベルを付ける画面やAPIはありません。
 10. 管理者とは別の利用者でもログインし、注文作成、履歴、進捗更新、請求書発行、再読み込み後の保持を確認してから一般利用を開始します。
 
 Appwrite Sitesは接続したGitHubブランチへのpushで自動ビルド・配信します。GitHub Actionsの `ci.yml` はビルドとテストだけを行います。秘密情報はRepositoryに保存しません。
