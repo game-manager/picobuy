@@ -71,7 +71,7 @@ appwrite sites list
 5. 関数の環境変数に `APPWRITE_ENDPOINT`、`APPWRITE_PROJECT_ID`、`ISSUER_NAME`、`ISSUER_ADDRESS`、`ISSUER_CONTACT`、`ISSUER_TAX_DETAILS`、`PAYMENT_INSTRUCTIONS` を登録します。後半5項目には実際の事業者・請求書情報を入力してください。架空の事業者情報では注文受付を開始しないでください。
 6. 作成済みの **Sites** `picobuy-web` に同じGitHub Repositoryを接続します。ビルドコマンドは `npm run build`、出力先は `dist`、本番ブランチは準備が完了した後に `main` とします。ビルド環境変数 `VITE_APPWRITE_ENDPOINT`、`VITE_APPWRITE_PROJECT_ID`、`VITE_APPWRITE_FUNCTION_ID=picobuy-api` は設定済みです。
 7. Sitesで発行されたホスト名をAppwriteプロジェクトのWebプラットフォームに追加します。独自ドメインは不要です。
-8. Appwrite Consoleの **Auth → Settings → OAuth2 Providers → Google** を開きます。Google側でOAuthクライアントを作成し、Appwrite画面に表示されるリダイレクトURLをGoogleの「承認済みのリダイレクトURI」に登録します。GoogleのクライアントIDとシークレットはAppwriteの設定画面にだけ入力し、リポジトリやチャットに貼らないでください。[Appwrite OAuth設定手順](https://appwrite.io/docs/products/auth/oauth2)を参照してください。
+8. Appwrite Consoleの **PicoBuy → Auth → Social providers（ソーシャルプロバイダー）** を開き、**Popular** または **All providers** からGoogleを選びます。Google側でOAuthクライアントを作成し、Appwrite画面の **Browser sign-in** に表示されるリダイレクトURLをGoogleの「承認済みのリダイレクトURI」に登録します。GoogleのクライアントIDとシークレットはAppwriteの設定画面にだけ入力し、リポジトリやチャットに貼らないでください。[Appwriteの現在の設定手順](https://appwrite.io/docs/partners/project/oauth)を参照してください。
 9. Google以外のサインイン方式（メール、電話、匿名、招待）をAuth設定で無効にします。JWTはFunction内での本人確認に使用するため有効のままにします。自分のGoogleアカウントでログインを確認し、管理者にする利用者にAppwrite Consoleから `admin` ラベルを付けます。利用者自身が管理者ラベルを付ける画面やAPIはありません。
 10. 管理者とは別の利用者でもログインし、注文作成、履歴、進捗更新、請求書発行、再読み込み後の保持を確認してから一般利用を開始します。
 
