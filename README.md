@@ -17,7 +17,7 @@
 
 ## 現在の公開状態
 
-このブランチは本番化の実装です。Cloudflare認証、メール送信元ドメイン、Resend、Turnstile、管理者メールおよび事業者情報の設定が完了するまで**公開しないでください**。設定不足の場合、Workerは注文操作を受け付けず、画面に準備中と表示します。既存のGitHub Pagesデモは、別途停止または転送するまで残ります。
+このブランチは本番化の実装です。D1とWorkerの初回配置は完了し、[WorkerのURL](https://picobuy-production.himawa.workers.dev/)では設定不足の間「現在ご利用いただけません」と表示します。メール送信元ドメイン、Resend、Turnstile、管理者メールおよび事業者情報の設定が完了するまで**一般利用を開始しないでください**。既存のGitHub Pagesデモは、別途停止または転送するまで残ります。
 
 ## ローカルで確認
 
@@ -33,16 +33,10 @@ npm run dev
 
 ## 本番初期設定
 
-1. Cloudflareアカウントで `npx wrangler login` し、`npx wrangler whoami` で対象アカウントを確認します。現在の作業環境ではログインが期限切れです。
+1. Cloudflareアカウントで `npx wrangler login` し、`npx wrangler whoami` で対象アカウントを確認します。この作業環境では認証済みです。
 2. 認証メール用の送信元ドメインを用意し、[Resendで確認](https://resend.com/docs/dashboard/domains/introduction)します。Resend APIキーと `MAIL_FROM`（例: `PicoBuy <login@your-domain.example>`）を用意します。
 3. [Cloudflare Turnstile](https://developers.cloudflare.com/turnstile/get-started/)に公開URLを登録し、サイトキーと秘密キーを用意します。
-4. Workerの初回デプロイを実行し、D1を作成します。初回は設定不足のため準備中画面になります。
-
-   ```bash
-   npm run build
-   npx wrangler deploy
-   npx wrangler d1 migrations apply picobuy-production --remote
-   ```
+4. D1 `picobuy-production` の作成・マイグレーションとWorkerの初回デプロイは完了しています。D1のIDは `wrangler.jsonc` に設定済みです。
 
 5. Cloudflare Workerの**Secrets**に `AUTH_SECRET`（32文字以上のランダム値）、`RESEND_API_KEY`、`TURNSTILE_SECRET_KEY` を設定します。`MAIL_FROM` と `TURNSTILE_SITE_KEY` もWorker環境変数として設定します。請求書の発行者情報として `ISSUER_NAME`、`ISSUER_ADDRESS`、`ISSUER_CONTACT`、`ISSUER_TAX_DETAILS`、`PAYMENT_INSTRUCTIONS` を設定します。`wrangler.jsonc` の `keep_vars` がダッシュボードで設定した環境変数を保持します。秘密を `wrangler.jsonc`、`.env`、GitHub Repositoryへ書き込まないでください。設定後に再デプロイします。
 6. 管理者にしたいメールアドレスで通常のメール認証を完了させ、D1内の該当利用者の `role` を `admin` に変更します。管理者を画面から自己登録する機能はありません。

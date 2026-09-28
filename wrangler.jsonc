@@ -14,6 +14,7 @@
     {
       "binding": "DB",
       "database_name": "picobuy-production",
+      "database_id": "9ac1722f-2b04-4562-9a63-6cdfeb612b8b",
       "migrations_dir": "migrations"
     }
   ],
