@@ -1,56 +1,63 @@
 # PicoBuy
 
-**欲しいを、もっと手軽に。** Amazonで見つけた商品の購入依頼を体験できる、React + TypeScript + Vite製の静的デモアプリです。Amazon公式またはAmazonと提携しているサービスではありません。商品情報は利用者が手入力し、商品ページのスクレイピングは行いません。
+**欲しいを、もっと手軽に。** Amazonで見つけた商品の購入依頼を受け付け、進捗を管理するWebアプリです。Amazon公式または提携サービスではありません。商品情報は利用者が入力し、スクレイピングは行いません。
 
-## できること
+## 構成
 
-- 商品名、Amazon商品URL、価格、数量、支払い予定日時、備考の入力
-- 商品代金に対する10%の手数料と合計金額の自動計算
-- 注文内容確認、確定、履歴、詳細、8段階の進捗タイムライン
-- `/#/admin` の管理デモで注文一覧、詳細、ステータス変更、見積書・請求書の表示と印刷
-- LocalStorageへの注文保存（ページを再読み込みしても保持）
+- React + TypeScript + Vite の画面とCloudflare Worker APIを同じオリジンから配信
+- Cloudflare D1に利用者、注文、進捗履歴、セッションを保存
+- メール認証コードでログイン。認証コードは10分有効、試行回数と送信回数を制限
+- HttpOnly・Secure・SameSite=Lax Cookieでログイン状態を維持
+- 管理者権限はD1の利用者レコードに保存。注文の閲覧・変更はAPIで権限を確認
+- 商品代金に対して10%の手数料を**サーバー側で再計算**
+- 管理者が内容を確認した後、事業者情報を含む変更不可の請求書を発行
+- GitHub Repositoryでソース管理。GitHub Actionsでビルド、D1マイグレーション、Workerデプロイ
 
-## 重要な制限
+**オンライン決済は実装していません。** 支払いの確認と商品購入は運営側の実務として行い、管理者がステータスを更新します。注文データはLocalStorageに保存しません。旧デモ版のLocalStorageデータは本番の注文として自動移行しません。
 
-**このアプリはUI・注文フロー検証用の初期版・デモ版です。** 注文データは利用中のブラウザのLocalStorageにだけ保存されます。同じブラウザ・同じオリジンでのみ閲覧でき、別端末の利用者や管理者とは共有されません。ブラウザデータを削除すると注文も消えます。実際の購入、請求、決済、通知は行いません。見積書・請求書もデモ表示です。
+## 現在の公開状態
 
-`/#/admin` は誰でも開けるデモ画面で、認証機能はありません。**本番環境ではサーバー側認証、アクセス制御、データベースが必要です。** JavaScript内に管理者パスワードや秘密鍵を置かないでください。実際の顧客情報や支払い情報を入力しないでください。
+このブランチは本番化の実装です。Cloudflare認証、メール送信元ドメイン、Resend、Turnstile、管理者メールおよび事業者情報の設定が完了するまで**公開しないでください**。設定不足の場合、Workerは注文操作を受け付けず、画面に準備中と表示します。既存のGitHub Pagesデモは、別途停止または転送するまで残ります。
 
-## ローカルで動かす
+## ローカルで確認
 
-Node.js 22以降を用意します。
+Node.js 22以降が必要です。
 
-1. このフォルダで `npm install` を実行します。
-2. `npm run dev` を実行し、表示されたURL（通常は `http://localhost:5173/`）を開きます。
-3. `npm run build` で本番用の `dist/` を生成します。必要に応じて `npm run preview` で確認できます。
+```bash
+npm install
+npm run build
+npm run dev
+```
 
-## GitHub Pagesへの公開
+`npm run dev` はD1のローカルマイグレーションを適用して `http://127.0.0.1:8787/` を起動します。実際のメール認証は送信元と秘密情報を設定するまで利用できません。秘密情報をソースやGitHubにコミットしないでください。`npm run build` は画面・Worker双方のTypeScriptチェックと本番ビルドを実行します。
 
-4. GitHubでRepositoryを作成します。例: `picobuy`。公開リポジトリにする場合は、実データや秘密情報をコミットしないでください。
-5. このフォルダで以下を実行し、`main` ブランチへpushします。
+## 本番初期設定
+
+1. Cloudflareアカウントで `npx wrangler login` し、`npx wrangler whoami` で対象アカウントを確認します。現在の作業環境ではログインが期限切れです。
+2. 認証メール用の送信元ドメインを用意し、[Resendで確認](https://resend.com/docs/dashboard/domains/introduction)します。Resend APIキーと `MAIL_FROM`（例: `PicoBuy <login@your-domain.example>`）を用意します。
+3. [Cloudflare Turnstile](https://developers.cloudflare.com/turnstile/get-started/)に公開URLを登録し、サイトキーと秘密キーを用意します。
+4. Workerの初回デプロイを実行し、D1を作成します。初回は設定不足のため準備中画面になります。
 
    ```bash
-   git init
-   git branch -M main
-   git remote add origin https://github.com/YOUR_NAME/picobuy.git
-   git add .
-   git commit -m "Build PicoBuy static demo"
-   git push -u origin main
+   npm run build
+   npx wrangler deploy
+   npx wrangler d1 migrations apply picobuy-production --remote
    ```
 
-6. Repositoryの **Settings → Pages → Build and deployment → Source** を **GitHub Actions** に設定します。
-7. `main` へのpush後、`.github/workflows/deploy.yml` が `npm ci`、`npm run build`、GitHub Pagesへのデプロイを自動実行します。Repositoryの **Actions** で成功を確認し、**Settings → Pages** に表示される公開URLを開きます。
+5. Cloudflare Workerの**Secrets**に `AUTH_SECRET`（32文字以上のランダム値）、`RESEND_API_KEY`、`TURNSTILE_SECRET_KEY` を設定します。`MAIL_FROM` と `TURNSTILE_SITE_KEY` もWorker環境変数として設定します。請求書の発行者情報として `ISSUER_NAME`、`ISSUER_ADDRESS`、`ISSUER_CONTACT`、`ISSUER_TAX_DETAILS`、`PAYMENT_INSTRUCTIONS` を設定します。`wrangler.jsonc` の `keep_vars` がダッシュボードで設定した環境変数を保持します。秘密を `wrangler.jsonc`、`.env`、GitHub Repositoryへ書き込まないでください。設定後に再デプロイします。
+6. 管理者にしたいメールアドレスで通常のメール認証を完了させ、D1内の該当利用者の `role` を `admin` に変更します。管理者を画面から自己登録する機能はありません。
+7. GitHub Repositoryの **Settings → Secrets and variables → Actions** に `CLOUDFLARE_API_TOKEN` と `CLOUDFLARE_ACCOUNT_ID` を登録します。必要な権限はWorkerとD1のデプロイに限定します。`main` へのpush後、`.github/workflows/deploy.yml` が自動デプロイします。
+8. 公開URLでメール認証、利用者による注文、別の管理者セッションでの閲覧・ステータス更新、再読み込み後の保持を確認してから利用を開始します。
 
-## Pagesのサブディレクトリ対応
+## APIとデータ
 
-Viteの `base` は `./` に設定しています。JavaScript・CSS・画像はリポジトリ名を含む公開パスから相対的に読み込まれます。画面遷移はハッシュルーティング（`/#/request`、`/#/history`、`/#/admin` など）なので、GitHub Pagesで再読み込みしても404になりません。`/admin` 相当のURLは `/#/admin` です。
-
-## データと計算
-
-注文には注文番号、商品名、Amazon商品URL、商品価格、数量、手数料、合計金額、支払い予定日時、注文ステータス、備考、作成日時、更新日時を保存します。手数料は `商品価格 × 数量 × 10%` を1円単位で四捨五入して計算します。注文時点の計算結果を保存します。
+`/api/auth/request-code`、`/api/auth/verify-code`、`/api/auth/me`、`/api/auth/logout`、`/api/orders`、`/api/orders/:id/invoice` を使用します。APIは同一オリジンからの更新だけを受け付けます。注文番号、商品情報、価格、数量、手数料、合計、支払い予定日時、ステータス、備考、作成・更新日時、利用者、ステータス変更履歴をD1へ保存します。注文番号と金額はサーバーで生成します。請求書は管理者が発行し、発行時の金額・事業者情報をD1に保存して固定します。
 
 ステータス: 依頼受付 → 支払い待ち → 支払い済み → 注文済み → 発送待ち → 発送済み → 到着 → 受け渡し完了。
 
-## 技術構成
+## 運用上の確認事項
 
-React、TypeScript、Vite、Lucide React。ホスティングはGitHub Pages、デプロイはGitHub Actionsです。Firebase関連の実装や設定はありません。
+- 注文時の価格・商品情報は利用者入力です。担当者がAmazonの商品ページで確認してください。
+- 支払い確認は外部で行い、確認後にのみ「支払い済み」に更新してください。
+- 見積書・請求書の正式発行には、事業者の正式名称、所在地、連絡先、税区分、支払い案内などが必要です。これらを確認せずに公開しないでください。
+- メール送信、D1のバックアップ・復元、事業者表示、個人情報の取り扱い、問い合わせ窓口を運用開始前に確認してください。
