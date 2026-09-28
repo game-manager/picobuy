@@ -30,6 +30,22 @@ npm test
 
 `.env.local` には自分のAppwriteプロジェクトの公開情報を入力します。`VITE_` で始まる値はブラウザに配信されます。APIキーや秘密情報を設定しないでください。設定がない画面は「現在ご利用いただけません」と表示します。
 
+## Appwrite CLI
+
+公式CLIでプロジェクト、TablesDB、Functions、Sitesを管理できます。WindowsでもNode.jsがあれば以下を実行できます。
+
+```powershell
+npm install -g appwrite-cli
+appwrite login
+appwrite init project
+appwrite whoami
+appwrite tablesdb list
+appwrite functions list
+appwrite sites list
+```
+
+このリポジトリの `appwrite.config.json` は作成済みのPicoBuyプロジェクトの公開IDとエンドポイントを指します。`appwrite login` はブラウザで本人確認します。CLIのログイン情報やAPIキーはGitHubへ登録しないでください。Google OAuthクライアントの作成はGoogle Cloudで行い、そのIDとシークレットはAppwrite ConsoleのAuth設定に入力します。
+
 ## Appwrite Cloudの初期設定
 
 1. [Appwrite Cloud](https://cloud.appwrite.io/)で無料アカウントとプロジェクト `PicoBuy` を作成します。プロジェクトのAPIエンドポイントとProject IDを控えます。
