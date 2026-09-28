@@ -54,6 +54,12 @@ describe('PicoBuy API', () => {
     expect((await updated.json() as { order: { status: string; statusEvents: unknown[] } }).order.status).toBe('発送済み')
     expect((await call(`/api/orders/${order.id}`, { headers: { cookie: owner.cookie } })).status).toBe(200)
     expect((await call(`/api/orders/${order.id}/invoice`, { method: 'POST', headers: { origin, cookie: owner.cookie, 'content-type': 'application/json' }, body: '{}' })).status).toBe(403)
-    expect((await call(`/api/orders/${order.id}/invoice`, { method: 'POST', headers: { origin, cookie: admin.cookie, 'content-type': 'application/json' }, body: '{}' })).status).toBe(503)
+    const issued = await call(`/api/orders/${order.id}/invoice`, { method: 'POST', headers: { origin, cookie: admin.cookie, 'content-type': 'application/json' }, body: '{}' })
+    expect(issued.status).toBe(200)
+    const { invoice } = await issued.json() as { invoice: { id: string; total: number } }
+    expect(invoice.total).toBe(22000)
+    const repeated = await call(`/api/orders/${order.id}/invoice`, { method: 'POST', headers: { origin, cookie: admin.cookie, 'content-type': 'application/json' }, body: '{}' })
+    expect((await repeated.json() as { invoice: { id: string } }).invoice.id).toBe(invoice.id)
+    expect((await call(`/api/orders/${order.id}/invoice`, { headers: { cookie: owner.cookie } })).status).toBe(200)
   })
 })
