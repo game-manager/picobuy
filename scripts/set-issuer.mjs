@@ -1,5 +1,6 @@
 import { createRequire } from 'node:module'
 import { dirname, join } from 'node:path'
+import { readFile } from 'node:fs/promises'
 import { createInterface } from 'node:readline/promises'
 import { stdin, stdout } from 'node:process'
 
@@ -33,8 +34,9 @@ async function main() {
     console.log('ここで入力した値はチャットにもGitにも保存しません。')
     values = {}
     for (const [key, label] of fields) {
-      const value = (await prompt.question(`${label} (${key}): `)).trim()
-      if (!value || value.length > 1000) throw new Error(`${label}は1〜1000文字で入力してください。`)
+      const input = (await prompt.question(`${label} (${key})${key === 'issuerTaxDetails' || key === 'paymentInstructions' ? ' ※長文は @ファイルパス' : ''}: `)).trim()
+      const value = input.startsWith('@') ? (await readFile(input.slice(1), 'utf8')).trim() : input
+      if (!value || value.length > 10000) throw new Error(`${label}は1〜10000文字で入力してください。`)
       values[key] = { stringValue: value }
     }
     const answer = (await prompt.question('実際の情報であることを確認し、登録しますか？ (yes/no): ')).trim().toLowerCase()
