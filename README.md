@@ -1,95 +1,73 @@
 # PicoBuy
 
-**欲しいを、もっと手軽に。** Amazonで見つけた商品の購入依頼を受け付け、進捗を管理するWebアプリです。Amazon公式または提携サービスではありません。商品情報は利用者が入力し、スクレイピングは行いません。
+**欲しいを、もっと手軽に。** Amazonで見つけた商品の購入依頼と進捗を管理するWebアプリです。商品名、URL、価格、数量は利用者自身が入力します。Amazon公式・提携サービスではなく、商品ページのスクレイピングも行いません。
 
-## 無料構成
+## 構成
 
-- React + TypeScript + Vite。ソースはGitHub、画面はAppwrite Sitesの無料プランで配信します。
-- Appwrite Authのメール認証コードでログインします。Google Cloudの設定は不要です。Appwrite Cloudの標準送信元を利用し、6桁のコードをメールで届けます。
-- 独自ドメインがないため、ブラウザによってセッションはLocalStorageに保存されます。共有端末での利用を避け、将来独自ドメインを設定できる場合は同一サイトのCookieへ移行してください。
-- Appwrite TablesDBに注文と請求書を保存します。管理者権限と金額計算はAppwrite Functionのサーバー側で判定します。
-- 利用者には自分の注文だけを返し、管理者にはすべての注文を返します。テーブルにはクライアントの直接アクセス権を付与しません。
-- 商品代金の10%を手数料としてサーバー側で計算します。請求書は管理者が内容を確認して発行し、発行時点の情報を固定します。
-- オンライン決済はありません。入金とAmazonでの購入は担当者がサービス外で確認・実行します。
+- 画面: React + TypeScript + Vite、[Firebase Hosting](https://firebase.google.com/docs/hosting/)
+- ログイン: Firebase AuthenticationのGoogleログイン
+- 共有データ: Cloud Firestore。注文、ステータス、請求書を端末間で共有
+- 権限と検証: [Firestore Security Rules](https://firebase.google.com/docs/firestore/security/rules-conditions)。本人の注文だけを表示し、管理者のみ進捗・請求書を変更できます。10%の手数料と合計もルール側で検証します。
+- デプロイ: GitHub Actionsでビルドとテスト、Firebase Hostingへ配信
 
-GitHub Pagesは[商用取引を主目的とするサイトの無料ホスティングに利用できません](https://docs.github.com/en/pages/getting-started-with-github-pages/github-pages-limits)。従来のPages版はデモであり、実際の注文は受け付けません。
+無料のSparkプランで運用するため、課金アカウントが必要なCloud Functionsは使用しません。オンライン決済には対応していません。入金確認とAmazonでの購入は担当者がサービス外で行います。Firebaseの[無料枠と上限](https://firebase.google.com/pricing)を超えて継続提供する構成ではありません。FirebaseはGoogleが提供するサービスですが、Google Cloud Consoleで別途OAuthクライアントを作成する必要はありません。
 
-**無料プランの制約:** Appwriteの無料枠には月間利用上限があり、[開発操作が7日間ないプロジェクトは停止します](https://appwrite.io/changelog/entry/2026-02-20-1)。利用者のアクセスだけで常時稼働を保証できません。無料枠には日次バックアップや稼働保証がありません。注文の運用開始前にデータの定期エクスポート、個人情報の扱い、事業者表示、問い合わせ窓口を決めてください。上限に達した場合に継続提供を保証する構成ではありません。
+**公開先:** [https://picobuy-touchbridge.web.app](https://picobuy-touchbridge.web.app)。事業者情報と公開スイッチの設定が終わるまでは、注文受付を閉じています。従来のGitHub Pagesサイトはデモとして残します。
 
-標準の認証メールは汎用的な送信元から届き、[無料プランでは独自SMTPやテンプレートを設定できません](https://appwrite.io/docs/products/auth/message-templates)。利用開始前に複数のメールサービスで受信を確認し、届かない場合の問い合わせ手段を用意してください。
+## 開発
 
-## ローカル確認
-
-Node.js 22以降を用意します。
+Node.js 22以降とJava 21以降（ルールテスト用）を用意してください。
 
 ```bash
 npm install
-copy .env.example .env.local
+cp .env.example .env.local
 npm run dev
 npm run build
 npm test
 ```
 
-`.env.local` には自分のAppwriteプロジェクトの公開情報を入力します。`VITE_` で始まる値はブラウザに配信されます。APIキーや秘密情報を設定しないでください。設定がない画面は「現在ご利用いただけません」と表示します。
+WindowsのPowerShellでは `cp` の代わりに `Copy-Item .env.example .env.local` でも構いません。`.env.local` の値はFirebase Consoleの **プロジェクトの設定 → マイアプリ → PicoBuy** で確認できます。本番ビルド用の公開設定は `.env.production` にあります。Firebase Web APIキーなどのWeb SDK設定値はブラウザに配信する識別子であり、秘密鍵ではありません。Firebaseのサービスアカウント鍵やトークンを `VITE_` 変数・ソース・チャットに入れないでください。
 
-## Appwrite CLI
+## Firebaseプロジェクトの設定
 
-公式CLIでプロジェクト、TablesDB、Functions、Sitesを管理できます。WindowsでもNode.jsがあれば以下を実行できます。
+このリポジトリは `touchbridge-nozomu-2026` 内のPicoBuy用WebアプリとHostingサイト `picobuy-touchbridge` を使用します。既存のTouchBridge用Hostingサイト・Realtime Databaseは変更しません。Firestoreの `(default)` データベースはPicoBuy用に新規作成済みです。
 
-```powershell
-npm install -g appwrite-cli
-appwrite login
-appwrite init project
-appwrite whoami
-appwrite tablesdb list
-appwrite functions list
-appwrite sites list
+1. Firebase CLIにログインします。
+
+   ```bash
+   npm install -g firebase-tools
+   firebase login
+   ```
+
+2. `firebase.json` のGoogleログイン設定、`firestore.rules`、`firestore.indexes.json` を確認します。Googleログインとルールは反映済みです。管理画面の表示だけで権限を判断せず、Firestoreルールを必ず配信してください。
+
+   ```bash
+   firebase deploy --only auth,firestore --project touchbridge-nozomu-2026
+   ```
+
+3. [PicoBuyサイト](https://picobuy-touchbridge.web.app)でGoogleログインします。Firebase Consoleの **Authentication → Users** で自分のUIDを調べます。
+4. Firebase Consoleの **Firestore Database → データ** でコレクション `admins`、ドキュメントIDをそのUIDとして作り、フィールド `active` を **boolean / true** にします。ブラウザから管理者権限を追加するAPIはありません。再読み込み後に `#/admin` を開いてください。
+5. 同じ画面で `settings` コレクションの `issuer` ドキュメントを作ります。次の5フィールドはすべて **string** で、実際の事業者・請求情報を入力してください。
+
+   | フィールド | 内容 |
+   | --- | --- |
+   | `issuerName` | 事業者名 |
+   | `issuerAddress` | 所在地 |
+   | `issuerContact` | 問い合わせ先 |
+   | `issuerTaxDetails` | 税に関する実際の記載 |
+   | `paymentInstructions` | 実際の支払い案内 |
+
+6. 商品価格の確認、支払い方法、連絡先、個人情報の扱い、データのバックアップ方法を整えてください。初回の注文と請求書をテストした後、`settings/launch` ドキュメントの `active` を **boolean / true** にすると注文受付が開きます。閉じるときは **false** にします。設定変更後、サイトを再読み込みしてください。
+
+請求書は管理者が発行すると内容をFirestoreに固定します。注文を削除する画面はありません。既存のAppwrite版やブラウザLocalStorageの注文は自動移行しません。
+
+## 配信
+
+```bash
+npm run build
+firebase deploy --only hosting:picobuy --project touchbridge-nozomu-2026
 ```
 
-このリポジトリの `appwrite.config.json` は作成済みのPicoBuyプロジェクトの公開IDとエンドポイントを指します。`appwrite login` はブラウザで本人確認します。CLIのログイン情報やAPIキーはGitHubへ登録しないでください。
+GitHub Repositoryは [game-manager/picobuy](https://github.com/game-manager/picobuy) です。Firebase版を `main` に取り込んだ後は、GitHub Actionsでビルド・ルールテスト・Hosting配信を行います。必要なGitHubシークレットはFirebase CLIの `firebase init hosting:github` で作成した実際のサービスアカウント鍵を使用します。秘密鍵をリポジトリへコミットしないでください。
 
-## Appwrite Cloudの初期設定
-
-1. [Appwrite Cloud](https://cloud.appwrite.io/)で無料アカウントとプロジェクト `PicoBuy` を作成します。プロジェクトのAPIエンドポイントとProject IDを控えます。このリポジトリに記録したPicoBuyプロジェクトは作成済みです。
-2. Appwrite CLIでログインし、プロジェクトを接続します。作成済みのPicoBuyプロジェクトではテーブルを再作成する必要はありません。別プロジェクトに複製する場合だけ、設定ファイルのプロジェクトIDを切り替えて `appwrite push tables` を実行します。
-
-   ```powershell
-   appwrite login
-   appwrite init project
-   appwrite tablesdb list
-   ```
-
-3. CLIを使わない別プロジェクトへの初期化では、`databases.read` と `databases.write` だけを許可した一時APIキーをローカル環境変数に設定し、`api-fn/setup.mjs` を実行できます。値は自分のものに置き換え、キーはチャット・GitHub・サイトの環境変数へ貼らないでください。
-
-   ```powershell
-   $env:APPWRITE_ENDPOINT = 'https://REGION.cloud.appwrite.io/v1'
-   $env:APPWRITE_PROJECT_ID = 'PROJECT_ID'
-   $env:APPWRITE_API_KEY = '作成したAPIキー'
-   node api-fn/setup.mjs
-   Remove-Item Env:APPWRITE_API_KEY
-   ```
-
-4. 作成済みの **Functions** `picobuy-api` にGitHub Repositoryの `api-fn` ディレクトリを接続します。エントリーポイントは `index.mjs`、インストールは `npm ci`、実行権限は `Any`、一時APIキーのスコープは `databases.read` と `databases.write` です。関数は毎回AppwriteのJWTを検証し、未ログインの注文操作を拒否します。
-5. 関数の環境変数に `APPWRITE_ENDPOINT`、`APPWRITE_PROJECT_ID`、`ISSUER_NAME`、`ISSUER_ADDRESS`、`ISSUER_CONTACT`、`ISSUER_TAX_DETAILS`、`PAYMENT_INSTRUCTIONS` を登録します。後半5項目には実際の事業者・請求書情報を入力してください。架空の事業者情報では注文受付を開始しないでください。
-6. 作成済みの **Sites** `picobuy-web` に同じGitHub Repositoryを接続します。ビルドコマンドは `npm run build`、出力先は `dist`、本番ブランチは準備が完了した後に `main` とします。ビルド環境変数 `VITE_APPWRITE_ENDPOINT`、`VITE_APPWRITE_PROJECT_ID`、`VITE_APPWRITE_FUNCTION_ID=picobuy-api` は設定済みです。
-7. Sitesで発行されたホスト名をAppwriteプロジェクトのWebプラットフォームに追加します。独自ドメインは不要です。
-8. Appwrite Consoleの **PicoBuy → Auth** でメール認証コード（Email OTP）を有効にします。作成済みプロジェクトでは有効化済みです。[メール認証コードの手順](https://appwrite.io/docs/products/auth/email-otp)を参照してください。
-9. 使わないサインイン方式（メールとパスワード、Magic URL、電話、匿名、招待）は無効にします。JWTはFunction内での本人確認に使用するため有効のままにします。自分のメールでログインを確認し、管理者にする利用者にAppwrite Consoleから `admin` ラベルを付けます。利用者自身が管理者ラベルを付ける画面やAPIはありません。
-10. 管理者とは別の利用者でもログインし、注文作成、履歴、進捗更新、請求書発行、再読み込み後の保持を確認してから一般利用を開始します。
-
-Appwrite Sitesは接続したGitHubブランチへのpushで自動ビルド・配信します。GitHub Actionsの `ci.yml` はビルドとテストだけを行います。秘密情報はRepositoryに保存しません。
-
-## データと権限
-
-- `orders` テーブル: 注文番号、利用者ID・メール、商品名、Amazon URL、単価、数量、手数料、合計、支払い予定日時、ステータス、備考、進捗履歴、作成・更新日時。
-- `invoices` テーブル: 発行時の金額、宛先、発行者情報、支払い案内を固定したスナップショット。
-- テーブルのクライアント権限は空です。注文作成・閲覧・更新と請求書発行はFunctionを通し、Functionが利用者ID・`admin` ラベルを検証します。
-- 注文の再送には冪等キーを使い、同じ依頼が二重登録されないようにします。
-- ステータス: 依頼受付 → 支払い待ち → 支払い済み → 注文済み → 発送待ち → 発送済み → 到着 → 受け渡し完了。
-
-## 運用時の確認
-
-- 利用者が入力した商品名・価格は、担当者がAmazonの商品ページで確認します。
-- 入金を確認するまで「支払い済み」に変更しません。
-- 見積書は利用者入力価格に基づく概算です。請求書には実在する事業者情報と適切な税の記載を設定します。
-- 旧デモ版のLocalStorageデータは本番注文へ自動移行しません。
+Firebase Hostingはルート配信で、画面内のURLは `#/request` や `#/admin` のハッシュルーティングです。Firestoreへの直接アクセスはルールで制御します。無料枠の利用状況はFirebase Consoleで定期的に確認してください。

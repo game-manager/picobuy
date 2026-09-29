@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react'
-import { ArrowLeft, ArrowRight, ArrowUpRight, Bell, Check, CheckCircle2, ChevronRight, CircleHelp, ClipboardList, Clock3, CreditCard, FileText, Home, LayoutDashboard, LogOut, Mail, Menu, Package, PackageCheck, Plus, Search, ShieldAlert, ShoppingBag, Sparkles, Truck, X } from 'lucide-react'
+import { ArrowLeft, ArrowRight, ArrowUpRight, Bell, Check, CheckCircle2, ChevronRight, CircleHelp, ClipboardList, Clock3, CreditCard, FileText, Home, LayoutDashboard, LogIn, LogOut, Menu, Package, PackageCheck, Plus, Search, ShieldAlert, ShoppingBag, Sparkles, Truck, X } from 'lucide-react'
 import { authApi, orderApi, ApiError, type Invoice, type User } from './api'
 import { dateTime, feeFor, isAmazonUrl, statuses, totalFor, yen, type Draft, type Order, type Status } from './data'
 
@@ -32,6 +32,7 @@ function App() {
   const [orders, setOrders] = useState<Order[]>([])
   const [user, setUser] = useState<User | null>(null)
   const [authReady, setAuthReady] = useState(false)
+  const [ordersOpen, setOrdersOpen] = useState(false)
   const [serviceError, setServiceError] = useState('')
   const [actionError, setActionError] = useState('')
   const [busy, setBusy] = useState(false)
@@ -46,9 +47,10 @@ function App() {
   useEffect(() => { const handler = () => { setPath(route()); setMenuOpen(false) }; window.addEventListener('hashchange', handler); return () => window.removeEventListener('hashchange', handler) }, [])
   useEffect(() => {
     let active = true
-    authApi.health().then(result => {
+    authApi.completeGoogleLogin().catch(() => { if (active) setActionError('Googleログインを完了できませんでした。もう一度お試しください。') }).then(() => authApi.health()).then(result => {
       if (!active) return
       if (!result.ready) { setServiceError('サービスの設定中です。公開までしばらくお待ちください。'); setAuthReady(true); return }
+      setOrdersOpen(result.ordersOpen)
       authApi.me().then(({ user: current }) => { if (!active) return; setUser(current); return orderApi.list().then(({ orders: items }) => { if (active) setOrders(items) }) })
         .catch(cause => { if (active && (!(cause instanceof ApiError) || cause.status !== 401)) setServiceError('サービスに接続できません。時間をおいて再試行してください。') })
         .finally(() => { if (active) setAuthReady(true) })
@@ -153,6 +155,7 @@ function App() {
   if (!authReady) page = <div className="page-wrap container"><div className="empty-state standalone"><h1>読み込み中...</h1></div></div>
   else if (serviceError) page = <ServiceUnavailablePage message={serviceError} />
   else if (path === '/login' || (protectedRoute && !user)) page = <LoginPage onLogin={login} />
+  else if ((path === '/request' || path === '/confirm') && !ordersOpen) page = <ServiceUnavailablePage message="注文受付は準備中です。公開までしばらくお待ちください。" />
   else if (adminRoute && user?.role !== 'admin') page = <AccessDeniedPage />
   else if (path === '/') page = <HomePage orders={orders} user={user} />
   else if (path === '/request') page = <RequestPage draft={draft} setDraft={setDraft} />
@@ -197,27 +200,24 @@ function ServiceNote({ admin = false }: { admin?: boolean }) {
 }
 
 function LoginPage({ onLogin }: { onLogin: (user: User) => Promise<void> }) {
-  const [email, setEmail] = useState('')
-  const [code, setCode] = useState('')
-  const [otpUserId, setOtpUserId] = useState('')
   const [busy, setBusy] = useState(false)
   const [errorMessage, setErrorMessage] = useState('')
-  const submit = async (event: FormEvent) => {
-    event.preventDefault(); setErrorMessage(''); setBusy(true)
+  const submit = async () => {
+    setErrorMessage(''); setBusy(true)
     try {
-      if (!otpUserId) { const result = await authApi.requestCode(email.trim().toLowerCase()); setOtpUserId(result.userId) }
-      else { const { user } = await authApi.verifyCode(otpUserId, code); await onLogin(user) }
-    } catch (cause) { setErrorMessage(cause instanceof Error ? cause.message : '認証できませんでした。') }
+      const result = await authApi.loginWithGoogle()
+      if (result) await onLogin(result.user)
+    } catch (cause) { setErrorMessage(cause instanceof Error ? cause.message : 'ログインできませんでした。') }
     finally { setBusy(false) }
   }
-  return <div className="page-wrap container auth-wrap"><PageHead eyebrow="SECURE SIGN IN" title="メールでログイン" subtitle="メールに届く6桁の認証コードで本人確認します。" back="/" /><form className="panel auth-card" onSubmit={submit}><div className="auth-icon"><Mail size={24} /></div><h2>{otpUserId ? '認証コードを入力' : 'メールアドレスを入力'}</h2><p>{otpUserId ? `${email} に送信した6桁のコードを入力してください。` : '初めての方もメールアドレスを入力してください。'}</p>{!otpUserId ? <><label>メールアドレス<input type="email" autoComplete="email" value={email} onChange={e => setEmail(e.target.value)} required placeholder="name@example.com" /></label><Button type="submit" disabled={busy || !email}>{busy ? '送信中...' : '認証コードを送信'} <ArrowRight size={17} /></Button></> : <><label>6桁の認証コード<input inputMode="numeric" pattern="[0-9]{6}" maxLength={6} autoComplete="one-time-code" value={code} onChange={e => setCode(e.target.value.replace(/\D/g, ''))} required placeholder="123456" /></label><Button type="submit" disabled={busy || code.length !== 6}>{busy ? '確認中...' : 'ログインする'} <ArrowRight size={17} /></Button><button type="button" className="text-button" onClick={() => { setOtpUserId(''); setCode('') }}>メールアドレスを変更する</button></>}{errorMessage && <p className="auth-error" role="alert">{errorMessage}</p>}</form></div>
+  return <div className="page-wrap container auth-wrap"><PageHead eyebrow="SECURE SIGN IN" title="Googleでログイン" subtitle="Googleアカウントで本人確認を行い、注文履歴を管理します。" back="/" /><div className="panel auth-card"><div className="auth-icon"><LogIn size={24} /></div><h2>ログインして始める</h2><p>Googleアカウントが必要です。ログイン後、注文依頼と進捗確認ができます。</p><Button onClick={submit} disabled={busy}>{busy ? '接続中...' : 'Googleでログイン'} <ArrowRight size={17} /></Button>{errorMessage && <p className="auth-error" role="alert">{errorMessage}</p>}</div></div>
 }
 
 function ServiceUnavailablePage({ message }: { message: string }) { return <div className="page-wrap container"><div className="empty-state standalone"><div className="empty-icon"><ShieldAlert size={32} /></div><h1>現在ご利用いただけません</h1><p>{message}</p></div></div> }
 function AccessDeniedPage() { return <div className="page-wrap container"><div className="empty-state standalone"><div className="empty-icon"><ShieldAlert size={32} /></div><h1>管理者権限が必要です</h1><p>このページは管理者アカウントだけが利用できます。</p><Button onClick={() => go('/')}>ホームへ戻る</Button></div></div> }
 
 function HomePage({ orders, user }: { orders: Order[], user: User | null }) {
-  return <><section className="hero"><div className="hero-orb hero-orb-one" /><div className="hero-orb hero-orb-two" /><div className="hero-inner"><div className="hero-content"><div className="hero-pill"><Sparkles size={14} /> 購入依頼を、シンプルに</div><h1>欲しいを、<br /><em>もっと手軽に。</em></h1><p>Amazonで見つけた商品を、かんたんに依頼。<br className="desktop-break" />お申し込みから受け渡しまで、ひとつの画面で見渡せます。</p><div className="hero-buttons"><Button onClick={() => go('/request')}>商品を依頼する <ArrowRight size={18} /></Button><Button variant="secondary" onClick={() => go('/history')}>注文を確認する</Button></div><div className="hero-caption"><span className="avatar-stack"><span>P</span><span>B</span><span>✓</span></span><span>メール認証で、注文を安全に管理</span></div></div><div className="hero-visual"><div className="visual-glow" /><div className="floating-label label-top"><span className="mini-icon cyan"><ShoppingBag size={18} /></span><span>かんたん商品依頼<small>数ステップで完了</small></span><CheckCircle2 size={18} className="green-icon" /></div><div className="showcase-card"><div className="showcase-top"><img src={`${iconBase}picobuy-mark.png`} alt="" /><div><span>YOUR ORDER</span><strong>注文状況をひと目で</strong></div><span className="showcase-dots">•••</span></div><div className="showcase-product"><div className="product-placeholder"><Package size={38} /></div><div><small>注文番号 PB-20260928-XXXXXX</small><strong>お気に入りの商品を依頼</strong><span>¥10,000 <i>＋ 手数料 ¥1,000</i></span></div></div><div className="showcase-progress"><div><span>現在のステータス</span><b>注文済み</b></div><div className="progress-track"><span /></div><div className="progress-steps"><span>依頼受付</span><span>支払い</span><span>お届け</span></div></div></div><div className="floating-label label-bottom"><span className="mini-icon royal"><Truck size={19} /></span><span>進捗をいつでも確認<small>8段階のタイムライン</small></span></div></div></div></section>
+  return <><section className="hero"><div className="hero-orb hero-orb-one" /><div className="hero-orb hero-orb-two" /><div className="hero-inner"><div className="hero-content"><div className="hero-pill"><Sparkles size={14} /> 購入依頼を、シンプルに</div><h1>欲しいを、<br /><em>もっと手軽に。</em></h1><p>Amazonで見つけた商品を、かんたんに依頼。<br className="desktop-break" />お申し込みから受け渡しまで、ひとつの画面で見渡せます。</p><div className="hero-buttons"><Button onClick={() => go('/request')}>商品を依頼する <ArrowRight size={18} /></Button><Button variant="secondary" onClick={() => go('/history')}>注文を確認する</Button></div><div className="hero-caption"><span className="avatar-stack"><span>P</span><span>B</span><span>✓</span></span><span>Googleログインで、注文を安全に管理</span></div></div><div className="hero-visual"><div className="visual-glow" /><div className="floating-label label-top"><span className="mini-icon cyan"><ShoppingBag size={18} /></span><span>かんたん商品依頼<small>数ステップで完了</small></span><CheckCircle2 size={18} className="green-icon" /></div><div className="showcase-card"><div className="showcase-top"><img src={`${iconBase}picobuy-mark.png`} alt="" /><div><span>YOUR ORDER</span><strong>注文状況をひと目で</strong></div><span className="showcase-dots">•••</span></div><div className="showcase-product"><div className="product-placeholder"><Package size={38} /></div><div><small>注文番号 PB-20260928-XXXXXX</small><strong>お気に入りの商品を依頼</strong><span>¥10,000 <i>＋ 手数料 ¥1,000</i></span></div></div><div className="showcase-progress"><div><span>現在のステータス</span><b>注文済み</b></div><div className="progress-track"><span /></div><div className="progress-steps"><span>依頼受付</span><span>支払い</span><span>お届け</span></div></div></div><div className="floating-label label-bottom"><span className="mini-icon royal"><Truck size={19} /></span><span>進捗をいつでも確認<small>8段階のタイムライン</small></span></div></div></div></section>
     <section className="quick-section container"><div className="section-title"><span className="eyebrow">HOW IT WORKS</span><h2>欲しい商品への、<br className="mobile-break" />最短ルート。</h2><p>面倒な手続きは最小限。必要な情報を入力するだけ。</p></div><div className="steps-grid"><div className="step-card"><span className="step-num">01</span><div className="feature-icon"><Search size={25} /></div><h3>商品を見つける</h3><p>Amazonで気になる商品を探し、URLと商品情報を入力します。</p></div><div className="step-card"><span className="step-num">02</span><div className="feature-icon"><ClipboardList size={25} /></div><h3>内容を確認して依頼</h3><p>商品代金と10%の手数料を確認。納得してから依頼を確定。</p></div><div className="step-card"><span className="step-num">03</span><div className="feature-icon"><PackageCheck size={25} /></div><h3>進捗をチェック</h3><p>注文後は8段階のタイムラインで、現在の状況を確認できます。</p></div></div></section>
     <section className="home-bottom container"><div className="bottom-card"><div><span className="eyebrow">GET STARTED</span><h2>さっそく、はじめよう。</h2><p>お気に入りの商品を見つけたら、PicoBuyで依頼を作成しましょう。</p></div><Button onClick={() => go(user ? '/request' : '/login')}>{user ? '新しい依頼を作成' : 'ログインして始める'} <ArrowRight size={18} /></Button></div>{orders.length > 0 && <button className="recent-link" onClick={() => go(`/order/${orders[0].id}`)}><span><Clock3 size={18} /> 最近の注文: {orders[0].productName}</span><ChevronRight size={18} /></button>}<ServiceNote /></section></>
 }
