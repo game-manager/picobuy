@@ -28,6 +28,12 @@ jobs:
       - run: npm ci
       - run: npm test
       - run: npm run build
+      - name: Deploy Firestore rules and indexes
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_TOUCHBRIDGE_NOZOMU_2026 }}
+        run: |
+          printf '%s' "$FIREBASE_SERVICE_ACCOUNT" > "$RUNNER_TEMP/firebase-service-account.json"
+          GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/firebase-service-account.json" npx firebase deploy --only firestore --project touchbridge-nozomu-2026 --non-interactive
       - uses: FirebaseExtended/action-hosting-deploy@v0
         with:
           firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_TOUCHBRIDGE_NOZOMU_2026 }}

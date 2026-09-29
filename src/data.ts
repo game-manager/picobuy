@@ -1,5 +1,24 @@
 export const statuses = ['依頼受付', '支払い待ち', '支払い済み', '注文済み', '発送待ち', '発送済み', '到着', '受け渡し完了'] as const
 export type Status = typeof statuses[number]
+export type OrderStatus = Status | 'キャンセル'
+
+export type Proposal = {
+  id: string
+  unitPrice: number
+  shipping: number
+  fee: number
+  total: number
+  reason: string
+  proposedAt: string
+}
+
+export type CashEntry = {
+  id: string
+  kind: '受領' | '返金'
+  amount: number
+  note: string
+  createdAt: string
+}
 
 export type Order = {
   id: string
@@ -10,12 +29,23 @@ export type Order = {
   quantity: number
   fee: number
   total: number
+  quotedTotal: number
   paymentDue: string
-  status: Status
+  status: OrderStatus
+  currentProposalId: string
+  acceptedProposalId: string
+  acceptedAt: string
+  proposal?: Proposal
+  proposals?: Proposal[]
+  acceptedQuotes?: Record<string, string>
+  cashEntries?: CashEntry[]
+  cashBalance: number
+  invoiceIssued?: boolean
+  cancelReason: string
   notes: string
   createdAt: string
   updatedAt: string
-  statusEvents?: { status: Status; createdAt: string }[]
+  statusEvents?: { status: OrderStatus; createdAt: string }[]
 }
 
 export type Draft = Pick<Order, 'productName' | 'amazonUrl' | 'price' | 'quantity' | 'paymentDue' | 'notes'>
