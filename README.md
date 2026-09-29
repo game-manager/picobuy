@@ -49,6 +49,8 @@ WindowsのPowerShellでは `cp` の代わりに `Copy-Item .env.example .env.loc
 4. Firebase Consoleの **Firestore Database → データ** でコレクション `admins`、ドキュメントIDをそのUIDとして作り、フィールド `active` を **boolean / true** にします。ブラウザから管理者権限を追加するAPIはありません。再読み込み後に `#/admin` を開いてください。
 5. 同じ画面で `settings` コレクションの `issuer` ドキュメントを作ります。次の5フィールドはすべて **string** で、実際の事業者・請求情報を入力してください。
 
+   Firebase CLIでログイン済みなら、ターミナルで `npm run setup:issuer` を実行して対話形式で入力することもできます。このコマンドは既存の `settings/issuer` を上書きしません。入力値はチャットやGitに保存されません。
+
    | フィールド | 内容 |
    | --- | --- |
    | `issuerName` | 事業者名 |
