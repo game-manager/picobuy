@@ -3,6 +3,7 @@ dist/
 .env
 .env.*
 !.env.example
+!.env.production
 .DS_Store
 *.local
 coverage/
@@ -11,3 +12,7 @@ coverage/
 .agents/
 .claude/
 work/
+firebase-debug.log
+firestore-debug.log
+ui-debug.log
+.firebase/

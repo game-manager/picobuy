@@ -1,0 +1,41 @@
+{
+  "firestore": {
+    "rules": "firestore.rules",
+    "indexes": "firestore.indexes.json"
+  },
+  "hosting": {
+    "target": "picobuy",
+    "public": "dist",
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**"
+    ],
+    "rewrites": [
+      {
+        "source": "**",
+        "destination": "/index.html"
+      }
+    ]
+  },
+  "emulators": {
+    "auth": {
+      "port": 9099
+    },
+    "firestore": {
+      "port": 8080
+    }
+  },
+  "auth": {
+    "providers": {
+      "googleSignIn": {
+        "oAuthBrandDisplayName": "PicoBuy",
+        "supportEmail": "lightnozomu+info@gmail.com",
+        "authorizedRedirectUris": [
+          "https://touchbridge-nozomu-2026.firebaseapp.com/__/auth/handler",
+          "https://picobuy-touchbridge.web.app/__/auth/handler"
+        ]
+      }
+    }
+  }
+}

@@ -1,0 +1,224 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null && request.auth.token.email_verified == true;
+    }
+
+    function isAdmin() {
+      return signedIn()
+        && exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+        && get(/databases/$(database)/documents/admins/$(request.auth.uid)).data.active == true;
+    }
+
+    function issuerReady() {
+      return exists(/databases/$(database)/documents/settings/issuer);
+    }
+
+    function launchReady() {
+      return exists(/databases/$(database)/documents/settings/launch)
+        && get(/databases/$(database)/documents/settings/launch).data.active == true;
+    }
+
+    function validOrder(orderId) {
+      let d = request.resource.data;
+      return issuerReady() && launchReady()
+        && orderId.matches('PB-[A-F0-9]{32}')
+        && d.keys().hasAll(['customerId', 'customerEmail', 'productName', 'amazonUrl', 'price', 'quantity', 'fee', 'total', 'quotedTotal', 'paymentDue', 'status', 'currentProposalId', 'acceptedProposalId', 'acceptedAt', 'acceptedQuotes', 'cancelReason', 'cashBalance', 'lastCashEntryId', 'notes', 'createdAt', 'updatedAt', 'statusTimes'])
+        && d.keys().hasOnly(['customerId', 'customerEmail', 'productName', 'amazonUrl', 'price', 'quantity', 'fee', 'total', 'quotedTotal', 'paymentDue', 'status', 'currentProposalId', 'acceptedProposalId', 'acceptedAt', 'acceptedQuotes', 'cancelReason', 'cashBalance', 'lastCashEntryId', 'notes', 'createdAt', 'updatedAt', 'statusTimes'])
+        && d.customerId == request.auth.uid
+        && d.customerEmail == request.auth.token.email
+        && d.productName is string && d.productName.size() > 0 && d.productName.size() <= 200
+        && d.amazonUrl is string && d.amazonUrl.size() <= 2000
+        && d.amazonUrl.matches('https://([a-z0-9-]+\\.)?amazon\\.(co\\.jp|com|co\\.uk|de|fr|it|es|ca|com\\.au|com\\.br|in|sg|nl|se|pl|ae|sa|com\\.mx)/.+')
+        && d.price is int && d.price >= 1 && d.price <= 100000000
+        && d.quantity is int && d.quantity >= 1 && d.quantity <= 99
+        && d.fee == math.round(d.price * d.quantity / 10)
+        && d.total == d.price * d.quantity + d.fee
+        && d.quotedTotal == 0
+        && d.paymentDue is timestamp && d.paymentDue > request.time
+        && d.status == '依頼受付'
+        && d.currentProposalId == '' && d.acceptedProposalId == '' && d.acceptedAt == null
+        && d.acceptedQuotes == {}
+        && d.cancelReason == ''
+        && d.cashBalance == 0 && d.lastCashEntryId == ''
+        && d.notes is string && d.notes.size() <= 2000
+        && d.createdAt == request.time && d.updatedAt == request.time
+        && d.statusTimes is map && d.statusTimes.keys().hasOnly(['0'])
+        && d.statusTimes.keys().hasAll(['0']) && d.statusTimes['0'] == request.time;
+    }
+
+    function nextStatus(oldStatus, newStatus) {
+      return (oldStatus == '支払い待ち' && newStatus == '支払い済み')
+        || (oldStatus == '支払い済み' && newStatus == '注文済み')
+        || (oldStatus == '注文済み' && newStatus == '発送待ち')
+        || (oldStatus == '発送待ち' && newStatus == '発送済み')
+        || (oldStatus == '発送済み' && newStatus == '到着')
+        || (oldStatus == '到着' && newStatus == '受け渡し完了');
+    }
+
+    function statusKey(status) {
+      return status == '支払い済み' ? '2' : status == '注文済み' ? '3'
+        : status == '発送待ち' ? '4' : status == '発送済み' ? '5'
+        : status == '到着' ? '6' : status == '受け渡し完了' ? '7' : '8';
+    }
+
+    function validAdminStatus(orderId) {
+      let d = request.resource.data;
+      return d.diff(resource.data).affectedKeys().hasOnly(['status', 'statusTimes', 'updatedAt', 'cancelReason'])
+        && (nextStatus(resource.data.status, d.status)
+          || (d.status == 'キャンセル' && resource.data.status in ['依頼受付', '支払い待ち', '支払い済み']))
+        && (d.status == 'キャンセル' ? d.cancelReason is string && d.cancelReason.size() > 0 && d.cancelReason.size() <= 1000 : d.cancelReason == resource.data.cancelReason)
+        && (d.status == 'キャンセル' || (d.currentProposalId == d.acceptedProposalId && d.currentProposalId != ''))
+        && (d.status in ['支払い済み', '注文済み']
+          ? d.cashBalance >= get(/databases/$(database)/documents/orders/$(orderId)/proposals/$(d.currentProposalId)).data.total
+          : true)
+        && d.statusTimes.diff(resource.data.statusTimes).affectedKeys().hasOnly([statusKey(d.status)])
+        && d.statusTimes[statusKey(d.status)] == request.time
+        && d.updatedAt == request.time;
+    }
+
+    function validAdminCashUpdate(orderId) {
+      let d = request.resource.data;
+      let entry = getAfter(/databases/$(database)/documents/orders/$(orderId)/cashEntries/$(d.lastCashEntryId)).data;
+      return d.diff(resource.data).affectedKeys().hasOnly(['cashBalance', 'lastCashEntryId', 'updatedAt'])
+        && d.lastCashEntryId is string && d.lastCashEntryId.size() > 0
+        && d.lastCashEntryId != resource.data.lastCashEntryId
+        && entry.customerId == resource.data.customerId
+        && d.cashBalance is int && d.cashBalance >= 0
+        && d.cashBalance == resource.data.cashBalance + (entry.kind == '受領' ? entry.amount : -entry.amount)
+        && d.updatedAt == request.time;
+    }
+
+    function validAdminProposalPointer(orderId) {
+      let d = request.resource.data;
+      return d.diff(resource.data).affectedKeys().hasOnly(['currentProposalId', 'quotedTotal', 'acceptedProposalId', 'acceptedAt', 'updatedAt'])
+        && d.currentProposalId is string && d.currentProposalId.size() > 0
+        && d.currentProposalId != resource.data.currentProposalId
+        && d.acceptedProposalId == '' && d.acceptedAt == null
+        && resource.data.status in ['依頼受付', '支払い待ち', '支払い済み']
+        && !exists(/databases/$(database)/documents/invoices/$(orderId))
+        && getAfter(/databases/$(database)/documents/orders/$(orderId)/proposals/$(d.currentProposalId)).data.customerId == resource.data.customerId
+        && d.quotedTotal == getAfter(/databases/$(database)/documents/orders/$(orderId)/proposals/$(d.currentProposalId)).data.total
+        && d.updatedAt == request.time;
+    }
+
+    function validCustomerAcceptance(orderId) {
+      let d = request.resource.data;
+      return signedIn() && resource.data.customerId == request.auth.uid
+        && d.diff(resource.data).affectedKeys().hasOnly(['acceptedProposalId', 'acceptedAt', 'acceptedQuotes', 'status', 'statusTimes', 'updatedAt'])
+        && resource.data.currentProposalId != ''
+        && resource.data.acceptedProposalId != resource.data.currentProposalId
+        && d.acceptedProposalId == resource.data.currentProposalId
+        && d.acceptedQuotes.diff(resource.data.acceptedQuotes).affectedKeys().hasOnly([d.acceptedProposalId])
+        && d.acceptedQuotes[d.acceptedProposalId] == request.time
+        && exists(/databases/$(database)/documents/orders/$(orderId)/proposals/$(d.acceptedProposalId))
+        && d.acceptedAt == request.time && d.updatedAt == request.time
+        && (resource.data.status == '依頼受付'
+          ? d.status == '支払い待ち'
+            && d.statusTimes.diff(resource.data.statusTimes).affectedKeys().hasOnly(['1'])
+            && d.statusTimes['1'] == request.time
+          : d.status == resource.data.status && d.statusTimes == resource.data.statusTimes
+            && resource.data.status in ['支払い待ち', '支払い済み']);
+    }
+
+    match /orders/{orderId} {
+      allow get: if isAdmin() || (signedIn() && resource.data.customerId == request.auth.uid);
+      allow list: if isAdmin() || (signedIn() && resource.data.customerId == request.auth.uid);
+      allow create: if signedIn() && validOrder(orderId);
+      allow update: if (isAdmin() && (validAdminStatus(orderId) || validAdminProposalPointer(orderId) || validAdminCashUpdate(orderId)))
+        || validCustomerAcceptance(orderId);
+      allow delete: if false;
+
+      match /proposals/{proposalId} {
+        allow get, list: if isAdmin() || (signedIn() && get(/databases/$(database)/documents/orders/$(orderId)).data.customerId == request.auth.uid);
+        allow create: if isAdmin()
+          && exists(/databases/$(database)/documents/orders/$(orderId))
+          && !exists(/databases/$(database)/documents/invoices/$(orderId))
+          && request.resource.data.keys().hasAll(['customerId', 'unitPrice', 'shipping', 'fee', 'total', 'reason', 'proposedBy', 'proposedAt'])
+          && request.resource.data.keys().hasOnly(['customerId', 'unitPrice', 'shipping', 'fee', 'total', 'reason', 'proposedBy', 'proposedAt'])
+          && request.resource.data.customerId == get(/databases/$(database)/documents/orders/$(orderId)).data.customerId
+          && request.resource.data.proposedBy == request.auth.uid
+          && request.resource.data.unitPrice is int && request.resource.data.unitPrice >= 1 && request.resource.data.unitPrice <= 100000000
+          && request.resource.data.shipping is int && request.resource.data.shipping >= 0 && request.resource.data.shipping <= 1000000
+          && request.resource.data.fee == math.round(request.resource.data.unitPrice * get(/databases/$(database)/documents/orders/$(orderId)).data.quantity / 10)
+          && request.resource.data.total == request.resource.data.unitPrice * get(/databases/$(database)/documents/orders/$(orderId)).data.quantity + request.resource.data.fee + request.resource.data.shipping
+          && request.resource.data.reason is string && request.resource.data.reason.size() > 0 && request.resource.data.reason.size() <= 1000
+          && request.resource.data.proposedAt == request.time
+          && getAfter(/databases/$(database)/documents/orders/$(orderId)).data.currentProposalId == proposalId;
+        allow update, delete: if false;
+      }
+
+      match /cashEntries/{entryId} {
+        allow get, list: if isAdmin() || (signedIn() && get(/databases/$(database)/documents/orders/$(orderId)).data.customerId == request.auth.uid);
+        allow create: if isAdmin()
+          && exists(/databases/$(database)/documents/orders/$(orderId))
+          && !exists(/databases/$(database)/documents/invoices/$(orderId))
+          && request.resource.data.keys().hasAll(['customerId', 'kind', 'amount', 'note', 'adminId', 'createdAt'])
+          && request.resource.data.keys().hasOnly(['customerId', 'kind', 'amount', 'note', 'adminId', 'createdAt'])
+          && request.resource.data.customerId == get(/databases/$(database)/documents/orders/$(orderId)).data.customerId
+          && request.resource.data.adminId == request.auth.uid
+          && request.resource.data.kind in ['受領', '返金']
+          && (request.resource.data.kind == '受領'
+            ? get(/databases/$(database)/documents/orders/$(orderId)).data.currentProposalId == get(/databases/$(database)/documents/orders/$(orderId)).data.acceptedProposalId
+              && get(/databases/$(database)/documents/orders/$(orderId)).data.currentProposalId != ''
+            : get(/databases/$(database)/documents/orders/$(orderId)).data.cashBalance >= request.resource.data.amount)
+          && request.resource.data.amount is int && request.resource.data.amount >= 1 && request.resource.data.amount <= 100000000
+          && request.resource.data.note is string && request.resource.data.note.size() > 0 && request.resource.data.note.size() <= 1000
+          && request.resource.data.createdAt == request.time
+          && getAfter(/databases/$(database)/documents/orders/$(orderId)).data.lastCashEntryId == entryId;
+        allow update, delete: if false;
+      }
+    }
+
+    function validInvoice(orderId) {
+      let d = request.resource.data;
+      let order = get(/databases/$(database)/documents/orders/$(orderId)).data;
+      let issuer = get(/databases/$(database)/documents/settings/issuer).data;
+      let proposal = get(/databases/$(database)/documents/orders/$(orderId)/proposals/$(d.proposalId)).data;
+      return issuerReady()
+        && d.keys().hasAll(['id', 'orderId', 'proposalId', 'customerId', 'customerEmail', 'issuerName', 'issuerAddress', 'issuerContact', 'issuerTaxDetails', 'paymentInstructions', 'productName', 'price', 'quantity', 'fee', 'shipping', 'total', 'paymentDue', 'notes', 'issuedAt'])
+        && d.keys().hasOnly(['id', 'orderId', 'proposalId', 'customerId', 'customerEmail', 'issuerName', 'issuerAddress', 'issuerContact', 'issuerTaxDetails', 'paymentInstructions', 'productName', 'price', 'quantity', 'fee', 'shipping', 'total', 'paymentDue', 'notes', 'issuedAt'])
+        && d.id == 'INV-' + orderId && d.orderId == orderId
+        && d.proposalId == order.currentProposalId && d.proposalId == order.acceptedProposalId
+        && order.status in ['注文済み', '発送待ち', '発送済み', '到着', '受け渡し完了']
+        && order.cashBalance == proposal.total
+        && d.customerId == order.customerId && d.customerEmail == order.customerEmail
+        && d.productName == order.productName && d.price == proposal.unitPrice
+        && d.quantity == order.quantity && d.fee == proposal.fee && d.shipping == proposal.shipping && d.total == proposal.total
+        && d.paymentDue == order.paymentDue && d.notes == order.notes
+        && d.issuerName == issuer.issuerName && d.issuerAddress == issuer.issuerAddress
+        && d.issuerContact == issuer.issuerContact && d.issuerTaxDetails == issuer.issuerTaxDetails
+        && d.paymentInstructions == issuer.paymentInstructions
+        && d.issuedAt == request.time;
+    }
+
+    match /invoices/{orderId} {
+      allow get: if isAdmin() || (signedIn() && get(/databases/$(database)/documents/orders/$(orderId)).data.customerId == request.auth.uid);
+      allow list: if false;
+      allow create: if isAdmin() && exists(/databases/$(database)/documents/orders/$(orderId)) && validInvoice(orderId);
+      allow update, delete: if false;
+    }
+
+    // Console or Admin SDK only. The browser cannot grant itself administrator access.
+    match /admins/{uid} {
+      allow read: if signedIn() && request.auth.uid == uid;
+      allow write: if false;
+    }
+
+    // Business details must be entered by the operator in Firebase Console.
+    match /settings/issuer {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+
+    match /settings/launch {
+      allow get: if true;
+      allow list, write: if false;
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

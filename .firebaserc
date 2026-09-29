@@ -1,0 +1,14 @@
+{
+  "projects": {
+    "default": "touchbridge-nozomu-2026"
+  },
+  "targets": {
+    "touchbridge-nozomu-2026": {
+      "hosting": {
+        "picobuy": [
+          "picobuy-touchbridge"
+        ]
+      }
+    }
+  }
+}
